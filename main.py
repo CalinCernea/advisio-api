@@ -223,6 +223,25 @@ def build_restaurant_data(data):
     }
 
 
+@app.route("/pdf/<path:public_id>/<filename>", methods=["GET"])
+def serve_pdf(public_id, filename):
+    """Proxy PDF de pe Cloudinary — compatibil iOS/Safari."""
+    import requests as req
+    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+    url = f"https://res.cloudinary.com/{cloud_name}/raw/upload/{public_id}"
+    r = req.get(url, timeout=30)
+    if r.status_code != 200:
+        return jsonify({"error": "PDF not found"}), 404
+    from flask import Response
+    return Response(
+        r.content,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": "application/pdf",
+        }
+    )
+    
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
