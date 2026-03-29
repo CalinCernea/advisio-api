@@ -19,7 +19,7 @@ CORS(app)
 app.register_blueprint(stripe_webhook)
 API_SECRET = os.environ.get("API_SECRET", "") # setat în Railway env vars
 def verify_secret(req):
-return req.headers.get("X-API-Secret") == API_SECRET
+    return req.headers.get("X-API-Secret") == API_SECRET
 @app.route("/health", methods=["GET"])
 def health():
 return jsonify({"status": "ok", "service": "Advisio PDF API"})
