@@ -7,3 +7,4 @@ google-auth==2.30.0
 google-auth-httplib2==0.2.0
 requests==2.32.3
 gunicorn==22.0.0
+cloudinary==1.40.0
