@@ -52,6 +52,7 @@ def _get_or_create_folder(service, folder_name: str, parent_id: str) -> str:
         fields="files(id, name)",
         supportsAllDrives=True,          # Important
         includeItemsFromAllDrives=True   # Important
+        driveId=parent_id,
     ).execute()
 
     files = results.get("files", [])
