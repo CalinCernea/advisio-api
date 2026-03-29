@@ -3,19 +3,20 @@ ADVISIO API — Railway Microservice
 ====================================
 Endpoints:
     POST /generate  → primește datele restaurantului, generează Teaser + Audit Complet,
-                       le urcă pe Google Drive, returnează link-urile + Stripe Payment Link
+                       le urcă pe Cloudinary, returnează link-urile + Stripe Payment Link
     GET  /health    → status check
 """
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os, io, json, traceback
+import os, traceback
 
 from pdf_teaser import build_teaser
 from pdf_audit import build_audit
 from drive_upload import upload_to_drive
 from stripe_link import create_payment_link
 from webhook import stripe_webhook
+from ai_generator import enrich_restaurant_data
 
 app = Flask(__name__)
 CORS(app)
@@ -50,39 +51,62 @@ def generate():
     if missing:
         return jsonify({"success": False, "error": f"Câmpuri lipsă: {missing}"}), 400
 
-    # ── Construim obiectul R pentru generatoarele PDF ──────────────
+    # ── Construim obiectul R de bază ───────────────────────────────
     R = build_restaurant_data(data)
 
+    # ── Îmbogățim R cu conținut generat de Claude AI ───────────────
+    R = enrich_restaurant_data(R)
+
     try:
-        # 1. Generează Teaser PDF
-        teaser_bytes = build_teaser(R)
-
-        # 2. Generează Audit Complet PDF
-        audit_bytes = build_audit(R)
-
-        # 3. Urcă pe Google Drive (în folder per restaurant)
         folder_name = f"Advisio — {R['bizName']} ({R['city']})"
+
+        # ── PASUL 1: Generăm PDF-urile fără stripe_url (primul pass) ──
+        # Scopul: obținem audit_url pentru Payment Link
+        teaser_bytes_v1 = build_teaser(R)
+        audit_bytes_v1  = build_audit(R)
+
+        # ── PASUL 2: Urcăm pe Cloudinary ──────────────────────────────
         teaser_url = upload_to_drive(
-            teaser_bytes,
+            teaser_bytes_v1,
             f"Teaser_{safe(R['bizName'])}.pdf",
             folder_name,
         )
         audit_url = upload_to_drive(
-            audit_bytes,
+            audit_bytes_v1,
             f"Audit_{safe(R['bizName'])}.pdf",
             folder_name,
         )
 
-        # 4. Creează Payment Link Stripe unic (97 USD)
+        # ── PASUL 3: Creăm Payment Link Stripe cu audit_url în metadata ──
         payment_url = create_payment_link(R, audit_url)
 
+        # ── PASUL 4: Acum că avem stripe_url, regenerăm PDF-urile ──────
+        # Butonul din PDF va conține linkul real de plată
+        R["stripe_url"]  = payment_url
+        R["payment_url"] = payment_url
+
+        teaser_bytes_v2 = build_teaser(R)
+        audit_bytes_v2  = build_audit(R)
+
+        # ── PASUL 5: Re-uploadăm PDF-urile finale (overwrite=True) ─────
+        teaser_url = upload_to_drive(
+            teaser_bytes_v2,
+            f"Teaser_{safe(R['bizName'])}.pdf",
+            folder_name,
+        )
+        audit_url = upload_to_drive(
+            audit_bytes_v2,
+            f"Audit_{safe(R['bizName'])}.pdf",
+            folder_name,
+        )
+
         return jsonify({
-            "success": True,
-            "teaser_url": teaser_url,
-            "audit_url": audit_url,
+            "success":     True,
+            "teaser_url":  teaser_url,
+            "audit_url":   audit_url,
             "payment_url": payment_url,
-            "bizName": R["bizName"],
-            "email": R["email"],
+            "bizName":     R["bizName"],
+            "email":       R["email"],
         })
 
     except Exception as err:
@@ -99,9 +123,8 @@ def safe(name):
 
 def build_restaurant_data(data):
     """
-    Construiește dicționarul R complet pentru generatoarele PDF.
-    Câmpurile OBLIGATORII vin din formular.
-    Câmpurile de CONȚINUT sunt placeholders pentru MVP.
+    Construiește dicționarul R de bază.
+    Câmpurile de conținut sunt placeholder-uri — vor fi suprascrise de enrich_restaurant_data().
     """
     biz  = data.get("bizName", data.get("biz", "Restaurant"))
     city = data.get("city", "România")
@@ -114,46 +137,48 @@ def build_restaurant_data(data):
         "address":  f"{city} | Restaurant",
         "email":    data.get("email", ""),
         "city":     city,
+        "type":     data.get("type", "restaurant"),
         "theme":    data.get("theme", "navy_gold"),
 
-        # ── Stripe ──────────────────────────────────────────────────
-        "stripe_url": data.get("stripe_url", ""),
-        "price":      "97 USD",
+        # ── Stripe — completat după create_payment_link() ───────────
+        "stripe_url":  "",
+        "payment_url": "",
+        "price":       "97 USD",
 
-        # ── Stats copertă ───────────────────────────────────────────
-        "stats": data.get("stats", [
+        # ── Placeholder stats — suprascrise de AI ───────────────────
+        "stats": [
             ("—", "Rating TripAdvisor"),
             ("—", "Poziție locală"),
             ("—", "Followeri Instagram"),
             ("—", "Facebook fans"),
-        ]),
+        ],
 
-        # ── Secțiunea 1 ─────────────────────────────────────────────
+        # ── Placeholder conținut — suprascris de AI ─────────────────
+        "emotional_hook": f"{biz} merită o prezență digitală la fel de bună ca experiența din restaurant.",
+
         "s1_subtitle": f"Ce am descoperit despre {biz} în urma cercetării noastre directe",
-        "s1_body": data.get("s1_body", [
+        "s1_body": [
             f"<b>{biz}</b> este analizat de echipa Advisio. "
             f"Raportul complet va fi disponibil în 24-48 de ore.",
-        ]),
-        "s1_attn": data.get("s1_attn", (
+        ],
+        "s1_attn": (
             "ATENȚIE — Analiză în curs:",
             f"Echipa Advisio cercetează prezența online a {biz} pe TripAdvisor, "
             f"Google, Instagram și Facebook.",
-        )),
-        "s1_metrics": data.get("s1_metrics", [
+        ),
+        "s1_metrics": [
             ("Prezență online", "În analiză", "Optimizat în 30 zile", "CRITICĂ"),
             ("Social media",   "În analiză", "Strategie activă",     "RIDICATĂ"),
             ("Recenzii",       "În analiză", "80%+ reply rate",       "RIDICATĂ"),
-        ]),
+        ],
 
-        # ── Secțiunea 2 ─────────────────────────────────────────────
-        "s2_subtitle":   f"Sarcini repetitive identificate pentru {biz}",
-        "losses":        data.get("losses", []),
-        "total_manual":  data.get("total_manual", "—"),
-        "total_ai":      data.get("total_ai", "—"),
+        "s2_subtitle":  f"Sarcini repetitive identificate pentru {biz}",
+        "losses":       [],
+        "total_manual": "—",
+        "total_ai":     "—",
 
-        # ── Secțiunea 3 ─────────────────────────────────────────────
         "s3_subtitle": f"Selecție specifică pentru {biz}",
-        "tools": data.get("tools", [
+        "tools": [
             (
                 "ChatGPT", "chatgpt.com", "Gratuit",
                 "Răspunsuri profesionale la recenzii, postări social media, texte promovare.",
@@ -169,20 +194,18 @@ def build_restaurant_data(data):
                 "Răspunde automat la DM-uri despre rezervări, program și meniu — 24/7.",
                 "DM-uri automate",
             ),
-        ]),
+        ],
 
-        # ── Secțiunea 4 ─────────────────────────────────────────────
         "s4_subtitle": f"Trei acțiuni prioritare pentru {biz}",
         "s4_intro":    f"{biz} poate implementa AI în operațiunile zilnice în 30 de zile.",
-        "weeks":       data.get("weeks", []),
+        "weeks":       [],
 
-        # ── Secțiunea 5 ─────────────────────────────────────────────
         "s5_subtitle": "Dacă preferi să nu construiești tu sistemul de la zero",
         "s5_intro": (
             f"Raportul de față îți arată exact ce trebuie făcut pentru {biz}. "
             f"Dacă preferi să primești totul gata, personalizat, în 48 de ore:"
         ),
-        "deliverables": data.get("deliverables", [
+        "deliverables": [
             (
                 "20 răspunsuri la recenzii scrise complet",
                 "În tonul profesional specific restaurantului tău, pentru toate situațiile.",
@@ -203,22 +226,17 @@ def build_restaurant_data(data):
                 "Materiale campanie recenzii",
                 "Card bilingv gata de tipărit + script verbal + instrucțiuni QR code.",
             ),
-        ]),
-        "urgency_lines": data.get("urgency_lines", [
+        ],
+        "urgency_lines": [
             f"{biz} pierde clienți în fiecare zi din cauza prezenței digitale neoptimizate.",
             "Fiecare răspuns neprofesional la o recenzie este citit de sute de potențiali clienți.",
             "Pachetul include toate materialele gata de folosit în 48 de ore.",
-        ]),
+        ],
         "s5_closing": (
             "Aceasta nu este o vânzare cu presiune. Raportul conține tot ce ai nevoie pentru a face "
             "singur. Dacă preferi să nu pierzi timp, accesează butonul de mai sus."
         ),
 
-        # ── Teaser specific ─────────────────────────────────────────
-        "emotional_hook": data.get(
-            "emotional_hook",
-            f"{biz} merită o prezență digitală la fel de bună ca experiența din restaurant.",
-        ),
         "cta_price": "GRATUIT",
     }
 
@@ -241,7 +259,8 @@ def serve_pdf(public_id, filename):
             "Content-Type": "application/pdf",
         }
     )
-    
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
