@@ -4,15 +4,13 @@ ADVISIO — Stripe Webhook Handler
 Primește evenimentul `checkout.session.completed` de la Stripe
 după ce clientul plătește 97 USD.
 Extrage metadata (email + audit_url) și trimite emailul cu auditul complet.
-Adaugă în main.py:
-    from webhook import stripe_webhook
-    app.register_blueprint(stripe_webhook)
+
 Configurare env vars:
     STRIPE_WEBHOOK_SECRET → whsec_... (din Stripe Dashboard → Webhooks)
     GMAIL_USER            → advisioai@gmail.com
     GMAIL_APP_PASSWORD    → parola de aplicație Gmail (nu parola contului)
 """
-import os, json, requests, smtplib
+import os, requests, smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -44,11 +42,28 @@ def handle_webhook():
 
     # Procesăm doar plățile confirmate
     if event["type"] == "checkout.session.completed":
-        session  = event["data"]["object"]
-        metadata = session.get("metadata", {})
-        email    = metadata.get("email") or session.get("customer_details", {}).get("email")
-        biz_name = metadata.get("bizName", "restaurantul tău")
+        session = event["data"]["object"]
+
+        # FIX: Pentru Payment Links, metadata e pe PaymentLink, nu pe session
+        # Încercăm întâi session.metadata, apoi PaymentLink.metadata
+        metadata = session.get("metadata") or {}
+
+        if not metadata.get("audit_url"):
+            payment_link_id = session.get("payment_link")
+            if payment_link_id:
+                try:
+                    pl = stripe.PaymentLink.retrieve(payment_link_id)
+                    metadata = pl.metadata or {}
+                    print(f"Metadata recuperată de pe PaymentLink {payment_link_id}")
+                except Exception as e:
+                    print(f"Nu am putut recupera PaymentLink metadata: {e}")
+
+        # Emailul: din metadata sau din customer_details (completat de Stripe Checkout)
+        email     = metadata.get("email") or session.get("customer_details", {}).get("email", "")
+        biz_name  = metadata.get("bizName", "restaurantul tău")
         audit_url = metadata.get("audit_url", "")
+
+        print(f"Webhook primit — email: {email} | biz: {biz_name} | audit_url: {audit_url[:60] if audit_url else 'LIPSĂ'}")
 
         if email and audit_url:
             try:
@@ -57,7 +72,7 @@ def handle_webhook():
                 print(f"Email error: {e}")
                 # Nu returnăm eroare către Stripe — Stripe va retry altfel
         else:
-            print(f"Webhook: date lipsă — email={email}, audit_url={audit_url}")
+            print(f"Webhook: date lipsă — email={email}, audit_url prezent={bool(audit_url)}")
 
     return jsonify({"received": True}), 200
 
@@ -65,7 +80,7 @@ def handle_webhook():
 def send_audit_email(to_email: str, biz_name: str, audit_url: str):
     """
     Trimite emailul cu auditul complet după plată.
-    Atașează PDF-ul descărcat de pe Drive.
+    Atașează PDF-ul descărcat de pe Cloudinary.
     """
     first_name = to_email.split("@")[0].capitalize()
     subject    = f"Auditul tău complet Advisio — {biz_name}"
@@ -147,7 +162,7 @@ def send_audit_email(to_email: str, biz_name: str, audit_url: str):
     msg.attach(MIMEText(text, "plain"))
     msg.attach(MIMEText(html, "html"))
 
-    # Atașează PDF-ul descărcat de pe Drive
+    # Atașează PDF-ul descărcat de pe Cloudinary
     try:
         r = requests.get(audit_url, timeout=30)
         if r.status_code == 200:
@@ -160,6 +175,9 @@ def send_audit_email(to_email: str, biz_name: str, audit_url: str):
                 f'attachment; filename="Audit_Advisio_{safe_name}.pdf"',
             )
             msg.attach(part)
+            print(f"✓ PDF atașat ({len(r.content)} bytes)")
+        else:
+            print(f"Nu am putut descărca PDF-ul pentru atașament: HTTP {r.status_code}")
     except Exception as e:
         print(f"Nu am putut atașa PDF-ul: {e} — emailul se trimite fără atașament")
 
@@ -167,4 +185,5 @@ def send_audit_email(to_email: str, biz_name: str, audit_url: str):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_USER, GMAIL_PASSWORD)
         server.sendmail(GMAIL_USER, to_email, msg.as_string())
+
     print(f"✓ Email audit trimis către {to_email} pentru {biz_name}")
