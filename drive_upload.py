@@ -39,4 +39,4 @@ def upload_to_drive(pdf_bytes: bytes, filename: str, folder_name: str) -> str:
         access_mode="public",
     )
 
-    return result["secure_url"]
+    return result["secure_url"] + ".pdf"
