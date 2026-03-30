@@ -8,7 +8,15 @@ import os
 import json
 import anthropic
 
-client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+# Lazy init — clientul se creează doar la primul apel, nu la import
+# Evită crash-ul la startup dacă ANTHROPIC_API_KEY nu e setat încă
+_client = None
+
+def get_client():
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+    return _client
 
 
 def generate_audit_content(biz: str, city: str, biz_type: str = "restaurant") -> dict:
@@ -166,7 +174,7 @@ IMPORTANT:
 - Recenziile și răspunsurile trebuie să sune natural, ca scrise de oameni reali
 - Răspunsul tău trebuie să fie DOAR JSON valid, nimic altceva"""
 
-    message = client.messages.create(
+    message = get_client().messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
