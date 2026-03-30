@@ -1,54 +1,54 @@
 """
-ADVISIO — Cloudinary Upload
-=======================================================
-Urcă un fișier PDF pe Cloudinary și returnează un link direct de download.
-Configurare env vars:
-- CLOUDINARY_CLOUD_NAME
-- CLOUDINARY_API_KEY
-- CLOUDINARY_API_SECRET
+ADVISIO — Supabase Storage Upload (înlocuiește Cloudinary)
+===========================================================
+Urcă un fișier PDF pe Supabase Storage și returnează un link public direct.
+
+Configurare env vars în Railway:
+- SUPABASE_URL         → https://xxxx.supabase.co
+- SUPABASE_SERVICE_KEY → eyJ... (service_role key din Settings → API)
+
+Bucket necesar în Supabase Storage:
+- Nume: advisio-pdfs
+- Public: ON
 """
 import os
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
+import requests
 
-cloudinary.config(
-    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", ""),
-    api_key=os.environ.get("CLOUDINARY_API_KEY", ""),
-    api_secret=os.environ.get("CLOUDINARY_API_SECRET", ""),
-)
+SUPABASE_URL         = os.environ.get("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+BUCKET_NAME          = "advisio-pdfs"
 
 
 def upload_to_drive(pdf_bytes: bytes, filename: str, folder_name: str) -> str:
     """
-    Urcă pdf_bytes pe Cloudinary.
-    Returnează un link direct de download.
+    Urcă pdf_bytes pe Supabase Storage.
+    Returnează URL public direct (fără autentificare).
     """
-    if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
-        raise ValueError("CLOUDINARY_CLOUD_NAME nu este setat în env vars.")
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        raise ValueError("SUPABASE_URL sau SUPABASE_SERVICE_KEY nu sunt setate în env vars.")
 
+    # Construim calea fișierului în bucket
     safe_folder = "".join(c for c in folder_name if c.isalnum() or c in " _-").strip().replace(" ", "_")
-    safe_file   = filename.replace(".pdf", "")
+    safe_file   = filename if filename.endswith(".pdf") else filename + ".pdf"
+    file_path   = f"{safe_folder}/{safe_file}"
 
-    # .pdf inclus în public_id — necesar pentru resource_type=raw
-    public_id = f"advisio/{safe_folder}/{safe_file}.pdf"
+    upload_url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET_NAME}/{file_path}"
 
-    result = cloudinary.uploader.upload(
-        pdf_bytes,
-        public_id=public_id,
-        resource_type="raw",
-        type="upload",          # explicit "upload" = public by default
-        overwrite=True,
-        invalidate=True,        # invalidează CDN cache la overwrite
-        access_mode="public",
-    )
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "Content-Type": "application/pdf",
+        "x-upsert": "true",   # suprascrie dacă există deja
+    }
 
-    # secure_url conține deja .pdf — nu mai adăugăm
-    url = result["secure_url"]
+    response = requests.post(upload_url, data=pdf_bytes, headers=headers, timeout=60)
 
-    # fl_attachment forțează download în browser și pe iOS/Android
-    # Înlocuim și eventualul /raw/upload/ cu versiunea cu fl_attachment
-    url = url.replace("/raw/upload/", "/raw/upload/fl_attachment/")
+    if response.status_code not in (200, 201):
+        raise ValueError(
+            f"Supabase upload failed: HTTP {response.status_code} — {response.text[:200]}"
+        )
 
-    print(f"✓ Upload Cloudinary OK: {url}")
-    return url
+    # URL public direct — funcționează pe orice device fără autentificare
+    public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{file_path}"
+
+    print(f"✓ Upload Supabase OK: {public_url}")
+    return public_url
