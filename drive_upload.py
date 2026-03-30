@@ -48,6 +48,7 @@ def upload_to_drive(pdf_bytes: bytes, filename: str, folder_name: str) -> str:
 
     # fl_attachment forțează download în browser și pe iOS/Android
     # Înlocuim și eventualul /raw/upload/ cu versiunea cu fl_attachment
+    url = url.replace("/raw/upload/", "/raw/upload/fl_attachment/")
 
     print(f"✓ Upload Cloudinary OK: {url}")
     return url
