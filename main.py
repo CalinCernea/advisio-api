@@ -3,13 +3,14 @@ ADVISIO API — Railway Microservice
 ====================================
 Endpoints:
     POST /generate  → primește datele restaurantului, generează Teaser + Audit Complet,
-                       le urcă pe Cloudinary, returnează link-urile + Stripe Payment Link
+                       le urcă pe Supabase, returnează link-urile + Stripe Payment Link
+    GET  /download  → proxy PDF cu forțare download (Content-Disposition: attachment)
     GET  /health    → status check
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, abort
 from flask_cors import CORS
-import os, traceback
+import os, traceback, requests as req
 
 from pdf_teaser import build_teaser
 from pdf_audit import build_audit
@@ -25,14 +26,63 @@ app.register_blueprint(stripe_webhook)
 API_SECRET = os.environ.get("API_SECRET", "")
 
 
-def verify_secret(req):
-    return req.headers.get("X-API-Secret") == API_SECRET
+def verify_secret(r):
+    return r.headers.get("X-API-Secret") == API_SECRET
 
+
+# ════════════════════════════════════════════════════════════════════
+#  HEALTH CHECK
+# ════════════════════════════════════════════════════════════════════
 
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "Advisio PDF API"})
 
+
+# ════════════════════════════════════════════════════════════════════
+#  DOWNLOAD PROXY — forțează descărcare PDF în browser / iOS
+# ════════════════════════════════════════════════════════════════════
+
+@app.route("/download", methods=["GET"])
+def download_pdf():
+    """
+    Proxy PDF cu header Content-Disposition: attachment.
+    Parametri query:
+        url      — URL-ul Supabase al PDF-ului
+        filename — numele fișierului descărcat (opțional)
+    """
+    url      = request.args.get("url", "").strip()
+    filename = request.args.get("filename", "Teaser_Advisio.pdf").strip()
+
+    if not url:
+        abort(400)
+
+    # Securitate minimă: acceptăm doar URL-uri Supabase
+    if "supabase.co" not in url:
+        abort(403)
+
+    try:
+        r = req.get(url, timeout=30)
+    except Exception as e:
+        return jsonify({"error": f"Nu am putut descărca PDF-ul: {str(e)}"}), 502
+
+    if r.status_code != 200:
+        return jsonify({"error": f"PDF not found (HTTP {r.status_code})"}), 404
+
+    return Response(
+        r.content,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type":        "application/pdf",
+            "Cache-Control":       "no-cache",
+        }
+    )
+
+
+# ════════════════════════════════════════════════════════════════════
+#  GENERATE — generează Teaser + Audit + Payment Link
+# ════════════════════════════════════════════════════════════════════
 
 @app.route("/generate", methods=["POST"])
 def generate():
@@ -47,7 +97,7 @@ def generate():
         return jsonify({"success": False, "error": "Invalid JSON"}), 400
 
     required = ["name", "email", "city", "bizName"]
-    missing = [f for f in required if not data.get(f)]
+    missing  = [f for f in required if not data.get(f)]
     if missing:
         return jsonify({"success": False, "error": f"Câmpuri lipsă: {missing}"}), 400
 
@@ -61,11 +111,10 @@ def generate():
         folder_name = f"Advisio — {R['bizName']} ({R['city']})"
 
         # ── PASUL 1: Generăm PDF-urile fără stripe_url (primul pass) ──
-        # Scopul: obținem audit_url pentru Payment Link
         teaser_bytes_v1 = build_teaser(R)
         audit_bytes_v1  = build_audit(R)
 
-        # ── PASUL 2: Urcăm pe Cloudinary ──────────────────────────────
+        # ── PASUL 2: Urcăm pe Supabase ────────────────────────────────
         teaser_url = upload_to_drive(
             teaser_bytes_v1,
             f"Teaser_{safe(R['bizName'])}.pdf",
@@ -80,8 +129,7 @@ def generate():
         # ── PASUL 3: Creăm Payment Link Stripe cu audit_url în metadata ──
         payment_url = create_payment_link(R, audit_url)
 
-        # ── PASUL 4: Acum că avem stripe_url, regenerăm PDF-urile ──────
-        # Butonul din PDF va conține linkul real de plată
+        # ── PASUL 4: Regenerăm PDF-urile cu stripe_url real ───────────
         R["stripe_url"]  = payment_url
         R["payment_url"] = payment_url
 
@@ -100,13 +148,23 @@ def generate():
             folder_name,
         )
 
+        # ── Construim URL-ul de download forțat prin proxy ────────────
+        base_url    = os.environ.get("RAILWAY_URL", "https://advisio-api-production.up.railway.app")
+        biz_safe    = safe(R["bizName"])
+        download_url = (
+            f"{base_url}/download"
+            f"?url={req.utils.quote(teaser_url, safe='')}"
+            f"&filename=Teaser_Advisio_{biz_safe}.pdf"
+        )
+
         return jsonify({
-            "success":     True,
-            "teaser_url":  teaser_url,
-            "audit_url":   audit_url,
-            "payment_url": payment_url,
-            "bizName":     R["bizName"],
-            "email":       R["email"],
+            "success":      True,
+            "teaser_url":   teaser_url,       # URL Supabase raw (pentru atașament email)
+            "download_url": download_url,     # URL proxy cu forțare download (pentru buton email)
+            "audit_url":    audit_url,
+            "payment_url":  payment_url,
+            "bizName":      R["bizName"],
+            "email":        R["email"],
         })
 
     except Exception as err:
@@ -114,7 +172,9 @@ def generate():
         return jsonify({"success": False, "error": str(err)}), 500
 
 
-# ── Helpers ────────────────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════
+#  HELPERS
+# ════════════════════════════════════════════════════════════════════
 
 def safe(name):
     """Nume sigur pentru fișiere."""
@@ -241,25 +301,9 @@ def build_restaurant_data(data):
     }
 
 
-@app.route("/pdf/<path:public_id>/<filename>", methods=["GET"])
-def serve_pdf(public_id, filename):
-    """Proxy PDF de pe Cloudinary — compatibil iOS/Safari."""
-    import requests as req
-    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
-    url = f"https://res.cloudinary.com/{cloud_name}/raw/upload/{public_id}"
-    r = req.get(url, timeout=30)
-    if r.status_code != 200:
-        return jsonify({"error": "PDF not found"}), 404
-    from flask import Response
-    return Response(
-        r.content,
-        mimetype="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Type": "application/pdf",
-        }
-    )
-
+# ════════════════════════════════════════════════════════════════════
+#  ENTRY POINT
+# ════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
