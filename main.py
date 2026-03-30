@@ -71,11 +71,12 @@ def download_pdf():
 
     return Response(
         r.content,
-        mimetype="application/pdf",
+        mimetype="application/octet-stream",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Type":        "application/pdf",
+            "Content-Type":        "application/octet-stream",
             "Cache-Control":       "no-cache",
+            "X-Content-Type-Options": "nosniff",
         }
     )
 
