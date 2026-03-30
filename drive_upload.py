@@ -1,5 +1,5 @@
 """
-ADVISIO — Cloudinary Upload (înlocuiește Google Drive)
+ADVISIO — Cloudinary Upload
 =======================================================
 Urcă un fișier PDF pe Cloudinary și returnează un link direct de download.
 Configurare env vars:
@@ -10,6 +10,7 @@ Configurare env vars:
 import os
 import cloudinary
 import cloudinary.uploader
+import cloudinary.api
 
 cloudinary.config(
     cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", ""),
@@ -29,20 +30,25 @@ def upload_to_drive(pdf_bytes: bytes, filename: str, folder_name: str) -> str:
     safe_folder = "".join(c for c in folder_name if c.isalnum() or c in " _-").strip().replace(" ", "_")
     safe_file   = filename.replace(".pdf", "")
 
-    # FIX: include .pdf în public_id — Cloudinary servește fișierul corect
-    # fără să mai fie nevoie să adăugăm extensia manual după
+    # .pdf inclus în public_id — necesar pentru resource_type=raw
     public_id = f"advisio/{safe_folder}/{safe_file}.pdf"
 
     result = cloudinary.uploader.upload(
         pdf_bytes,
         public_id=public_id,
         resource_type="raw",
+        type="upload",          # explicit "upload" = public by default
         overwrite=True,
+        invalidate=True,        # invalidează CDN cache la overwrite
         access_mode="public",
     )
 
-    # secure_url conține deja extensia .pdf — nu mai adăugăm nimic
+    # secure_url conține deja .pdf — nu mai adăugăm
     url = result["secure_url"]
 
-    # fl_attachment forțează download-ul în browser și pe iOS
-    return url.replace("/raw/upload/", "/raw/upload/fl_attachment/")
+    # fl_attachment forțează download în browser și pe iOS/Android
+    # Înlocuim și eventualul /raw/upload/ cu versiunea cu fl_attachment
+    url = url.replace("/raw/upload/", "/raw/upload/fl_attachment/")
+
+    print(f"✓ Upload Cloudinary OK: {url}")
+    return url
