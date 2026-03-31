@@ -3,13 +3,13 @@ ADVISIO — Stripe Webhook Handler
 ==================================
 Primește evenimentul `checkout.session.completed` de la Stripe
 după ce clientul plătește 97 USD.
-Extrage metadata (email + audit_url) și delegă trimiterea emailului
-către Google Apps Script (care folosește GmailApp — fără SMTP blocat).
+Extrage metadata (email + audit_url + sheet_row) și delegă trimiterea
+emailului către Google Apps Script care actualizează și statusul în sheet.
 
 Configurare env vars:
-    STRIPE_WEBHOOK_SECRET → whsec_... (din Stripe Dashboard → Webhooks)
-    APPS_SCRIPT_URL       → URL-ul de deployment al Apps Script (doPost)
-    APPS_SCRIPT_SECRET    → advisio_as_secret_2026 (același ca în Code.gs)
+    STRIPE_WEBHOOK_SECRET → whsec_...
+    APPS_SCRIPT_URL       → URL-ul de deployment al Apps Script
+    APPS_SCRIPT_SECRET    → advisio_as_secret_2026
 """
 import os
 import requests
@@ -29,7 +29,6 @@ def handle_webhook():
     payload = request.data
     sig     = request.headers.get("Stripe-Signature", "")
 
-    # Verifică semnătura Stripe
     try:
         event = stripe.Webhook.construct_event(payload, sig, WEBHOOK_SECRET)
     except stripe.error.SignatureVerificationError:
@@ -37,7 +36,6 @@ def handle_webhook():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-    # Procesăm doar plățile confirmate
     if event["type"] == "checkout.session.completed":
         session  = event["data"]["object"]
         metadata = session.get("metadata") or {}
@@ -56,29 +54,29 @@ def handle_webhook():
         email     = metadata.get("email") or session.get("customer_details", {}).get("email", "")
         biz_name  = metadata.get("bizName", "restaurantul tău")
         audit_url = metadata.get("audit_url", "")
+        sheet_row = metadata.get("sheet_row", "")  # ← rândul din sheet
 
-        print(f"Webhook primit — email: {email} | biz: {biz_name} | audit_url: {audit_url[:60] if audit_url else 'LIPSĂ'}")
+        print(f"Webhook primit — email: {email} | biz: {biz_name} | row: {sheet_row} | audit_url: {audit_url[:60] if audit_url else 'LIPSĂ'}")
 
         if email and audit_url:
             try:
-                send_via_apps_script(email, biz_name, audit_url)
+                send_via_apps_script(email, biz_name, audit_url, sheet_row)
             except Exception as e:
                 print(f"Apps Script error: {e}")
         else:
             print(f"Webhook: date lipsă — email={email}, audit_url prezent={bool(audit_url)}")
 
-    # Răspundem imediat 200 către Stripe — nu așteptăm emailul
     return jsonify({"received": True}), 200
 
 
-def send_via_apps_script(email: str, biz_name: str, audit_url: str):
+def send_via_apps_script(email: str, biz_name: str, audit_url: str, sheet_row: str):
     """
-    Trimite un POST către Google Apps Script care va folosi GmailApp
-    pentru a trimite emailul cu auditul complet.
-    Apps Script rulează pe serverele Google — fără restricții SMTP.
+    Trimite POST către Google Apps Script care:
+    1. Trimite emailul cu auditul complet via GmailApp
+    2. Actualizează statusul în sheet la '✅ Audit trimis'
     """
     if not APPS_SCRIPT_URL:
-        print("APPS_SCRIPT_URL nu este setat — emailul nu poate fi trimis!")
+        print("APPS_SCRIPT_URL nu este setat!")
         return
 
     payload = {
@@ -87,6 +85,7 @@ def send_via_apps_script(email: str, biz_name: str, audit_url: str):
         "email":    email,
         "bizName":  biz_name,
         "auditUrl": audit_url,
+        "row":      sheet_row,  # ← transmitem rândul către Apps Script
     }
 
     response = requests.post(
@@ -98,7 +97,7 @@ def send_via_apps_script(email: str, biz_name: str, audit_url: str):
     if response.status_code == 200:
         result = response.json()
         if result.get("sent"):
-            print(f"✓ Email audit trimis via Apps Script către {email}")
+            print(f"✓ Email audit trimis via Apps Script către {email} | row: {sheet_row}")
         else:
             print(f"Apps Script response neașteptat: {result}")
     else:
