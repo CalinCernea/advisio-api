@@ -18,6 +18,7 @@ from drive_upload import upload_to_drive
 from stripe_link import create_payment_link
 from webhook import stripe_webhook
 from ai_generator import enrich_restaurant_data
+from text_utils import clean_dict, clean  # ← curățare diacritice
 
 app = Flask(__name__)
 CORS(app)
@@ -90,19 +91,25 @@ def generate():
     required = ["name", "email", "city", "bizName"]
     missing  = [f for f in required if not data.get(f)]
     if missing:
-        return jsonify({"success": False, "error": f"Câmpuri lipsă: {missing}"}), 400
+        return jsonify({"success": False, "error": f"Campuri lipsa: {missing}"}), 400
 
+    # Construim R de bază
     R = build_restaurant_data(data)
+
+    # Îmbogățim cu AI
     R = enrich_restaurant_data(R)
 
-    try:
-        folder_name = f"Advisio — {R['bizName']} ({R['city']})"
+    # ── Curățăm TOATE diacriticele din R pentru ReportLab ─────────
+    R = clean_dict(R)
 
-        # PASUL 1: Generăm PDF-urile fără stripe_url
+    try:
+        folder_name = f"Advisio -- {R['bizName']} ({R['city']})"
+
+        # PASUL 1: PDF-uri fără stripe_url
         teaser_bytes_v1 = build_teaser(R)
         audit_bytes_v1  = build_audit(R)
 
-        # PASUL 2: Urcăm pe Supabase
+        # PASUL 2: Upload Supabase
         teaser_url = upload_to_drive(teaser_bytes_v1, f"Teaser_{safe(R['bizName'])}.pdf", folder_name)
         audit_url  = upload_to_drive(audit_bytes_v1,  f"Audit_{safe(R['bizName'])}.pdf",  folder_name)
 
@@ -116,7 +123,7 @@ def generate():
         teaser_bytes_v2 = build_teaser(R)
         audit_bytes_v2  = build_audit(R)
 
-        # PASUL 5: Re-uploadăm
+        # PASUL 5: Re-upload final
         teaser_url = upload_to_drive(teaser_bytes_v2, f"Teaser_{safe(R['bizName'])}.pdf", folder_name)
         audit_url  = upload_to_drive(audit_bytes_v2,  f"Audit_{safe(R['bizName'])}.pdf",  folder_name)
 
@@ -154,7 +161,7 @@ def safe(name):
 
 def build_restaurant_data(data):
     biz  = data.get("bizName", data.get("biz", "Restaurant"))
-    city = data.get("city", "România")
+    city = data.get("city", "Romania")
 
     return {
         "bizName":   biz,
@@ -165,74 +172,74 @@ def build_restaurant_data(data):
         "city":      city,
         "type":      data.get("type", "restaurant"),
         "theme":     data.get("theme", "navy_gold"),
-        "sheet_row": data.get("sheet_row", ""),  # ← primit din Apps Script
+        "sheet_row": data.get("sheet_row", ""),
         "stripe_url":  "",
         "payment_url": "",
         "price":       "97 USD",
         "stats": [
             ("—", "Rating TripAdvisor"),
-            ("—", "Poziție locală"),
+            ("—", "Pozitie locala"),
             ("—", "Followeri Instagram"),
             ("—", "Facebook fans"),
         ],
-        "emotional_hook": f"{biz} merită o prezență digitală la fel de bună ca experiența din restaurant.",
-        "s1_subtitle": f"Ce am descoperit despre {biz} în urma cercetării noastre directe",
+        "emotional_hook": f"{biz} merita o prezenta digitala la fel de buna ca experienta din restaurant.",
+        "s1_subtitle": f"Ce am descoperit despre {biz} in urma cercetarii noastre directe",
         "s1_body": [
-            f"<b>{biz}</b> este analizat de echipa Advisio. Raportul complet va fi disponibil în 24-48 de ore.",
+            f"<b>{biz}</b> este analizat de echipa Advisio. Raportul complet va fi disponibil in 24-48 de ore.",
         ],
         "s1_attn": (
-            "ATENȚIE — Analiză în curs:",
-            f"Echipa Advisio cercetează prezența online a {biz} pe TripAdvisor, Google, Instagram și Facebook.",
+            "ATENTIE — Analiza in curs:",
+            f"Echipa Advisio cerceteaza prezenta online a {biz} pe TripAdvisor, Google, Instagram si Facebook.",
         ),
         "s1_metrics": [
-            ("Prezență online", "În analiză", "Optimizat în 30 zile", "CRITICĂ"),
-            ("Social media",   "În analiză", "Strategie activă",     "RIDICATĂ"),
-            ("Recenzii",       "În analiză", "80%+ reply rate",       "RIDICATĂ"),
+            ("Prezenta online", "In analiza", "Optimizat in 30 zile", "CRITICA"),
+            ("Social media",   "In analiza", "Strategie activa",     "RIDICATA"),
+            ("Recenzii",       "In analiza", "80%+ reply rate",       "RIDICATA"),
         ],
         "s2_subtitle":  f"Sarcini repetitive identificate pentru {biz}",
         "losses":       [],
         "total_manual": "—",
         "total_ai":     "—",
-        "s3_subtitle": f"Selecție specifică pentru {biz}",
+        "s3_subtitle": f"Selectie specifica pentru {biz}",
         "tools": [
             ("ChatGPT", "chatgpt.com", "Gratuit",
-             "Răspunsuri profesionale la recenzii, postări social media, texte promovare.",
+             "Raspunsuri profesionale la recenzii, postari social media, texte promovare.",
              "Recenzii, Social Media"),
-            ("Claude", "claude.ai", "Gratuit (Pro $20/lună opțional)",
-             "Rescriere meniu cu storytelling culinar, strategii de creștere Instagram.",
+            ("Claude", "claude.ai", "Gratuit (Pro $20/luna optional)",
+             "Rescriere meniu cu storytelling culinar, strategii de crestere Instagram.",
              "Meniu, Strategie"),
-            ("ManyChat", "manychat.com", "Gratuit până la 1.000 contacte",
-             "Răspunde automat la DM-uri despre rezervări, program și meniu — 24/7.",
+            ("ManyChat", "manychat.com", "Gratuit pana la 1.000 contacte",
+             "Raspunde automat la DM-uri despre rezervari, program si meniu — 24/7.",
              "DM-uri automate"),
         ],
-        "s4_subtitle": f"Trei acțiuni prioritare pentru {biz}",
-        "s4_intro":    f"{biz} poate implementa AI în operațiunile zilnice în 30 de zile.",
+        "s4_subtitle": f"Trei actiuni prioritare pentru {biz}",
+        "s4_intro":    f"{biz} poate implementa AI in operatiunile zilnice in 30 de zile.",
         "weeks":       [],
-        "s5_subtitle": "Dacă preferi să nu construiești tu sistemul de la zero",
+        "s5_subtitle": "Daca preferi sa nu construiesti tu sistemul de la zero",
         "s5_intro": (
-            f"Raportul de față îți arată exact ce trebuie făcut pentru {biz}. "
-            f"Dacă preferi să primești totul gata, personalizat, în 48 de ore:"
+            f"Raportul de fata iti arata exact ce trebuie facut pentru {biz}. "
+            f"Daca preferi sa primesti totul gata, personalizat, in 48 de ore:"
         ),
         "deliverables": [
-            ("20 răspunsuri la recenzii scrise complet",
-             "În tonul profesional specific restaurantului tău, pentru toate situațiile."),
-            ("Calendar de conținut 30 de zile complet scris",
-             "Postări finalizate pentru Instagram și Facebook, cu hashtag-uri locale."),
+            ("20 raspunsuri la recenzii scrise complet",
+             "In tonul profesional specific restaurantului tau, pentru toate situatiile."),
+            ("Calendar de continut 30 de zile complet scris",
+             "Postari finalizate pentru Instagram si Facebook, cu hashtag-uri locale."),
             ("5 template-uri DM bilingve (RO/EN) gata de salvat",
-             "Pentru rezervări, program, evenimente, meniu și direcții."),
+             "Pentru rezervari, program, evenimente, meniu si directii."),
             ("Meniu principal rescris cu storytelling culinar",
              "Toate preparatele principale cu descrieri narative, gata de publicat."),
             ("Materiale campanie recenzii",
-             "Card bilingv gata de tipărit + script verbal + instrucțiuni QR code."),
+             "Card bilingv gata de tiparit + script verbal + instructiuni QR code."),
         ],
         "urgency_lines": [
-            f"{biz} pierde clienți în fiecare zi din cauza prezenței digitale neoptimizate.",
-            "Fiecare răspuns neprofesional la o recenzie este citit de sute de potențiali clienți.",
-            "Pachetul include toate materialele gata de folosit în 48 de ore.",
+            f"{biz} pierde clienti in fiecare zi din cauza prezentei digitale neoptimizate.",
+            "Fiecare raspuns neprofesional la o recenzie este citit de sute de potentiali clienti.",
+            "Pachetul include toate materialele gata de folosit in 48 de ore.",
         ],
         "s5_closing": (
-            "Aceasta nu este o vânzare cu presiune. Raportul conține tot ce ai nevoie pentru a face "
-            "singur. Dacă preferi să nu pierzi timp, accesează butonul de mai sus."
+            "Aceasta nu este o vanzare cu presiune. Raportul contine tot ce ai nevoie pentru a face "
+            "singur. Daca preferi sa nu pierzi timp, acceseaza butonul de mai sus."
         ),
         "cta_price": "GRATUIT",
     }
