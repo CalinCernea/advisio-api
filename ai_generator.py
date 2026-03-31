@@ -1,9 +1,8 @@
 """
 ADVISIO — Generator conținut AI cu Claude + Web Search
 ========================================================
-1. Caută date reale despre restaurant (TripAdvisor, Google, Instagram, Facebook)
-   folosind web search nativ Anthropic — model Haiku (ieftin)
-2. Generează audit personalizat bazat pe datele reale găsite — model Sonnet
+1. Caută date reale despre restaurant via web search Anthropic (Haiku)
+2. Generează audit personalizat bazat pe datele reale găsite (Sonnet)
 """
 import os
 import json
@@ -17,45 +16,80 @@ def get_client():
         _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
     return _client
 
-# Haiku — ieftin, suficient pentru web search
-MODEL_RESEARCH  = "claude-haiku-4-5-20251001"
-# Sonnet — calitate bună pentru generarea auditului
-MODEL_GENERATE  = "claude-sonnet-4-6"
+MODEL_RESEARCH = "claude-haiku-4-5-20251001"
+MODEL_GENERATE = "claude-sonnet-4-6"
 
 
 def research_restaurant(biz: str, city: str) -> str:
     """
-    Caută date reale despre restaurant folosind web search Claude Haiku.
+    Caută date reale despre restaurant folosind web search Claude.
+    Folosește agentic loop — continuă până când Claude termină cu un răspuns text final.
     """
     print(f"🔍 Căutăm date reale pentru: {biz} ({city})")
 
     research_prompt = f"""Caută informații reale și concrete despre restaurantul "{biz}" din {city}, România.
 
 Caută pe:
-1. TripAdvisor — rating exact, număr recenzii, poziție în clasamentul local (ex: #3 din 45), recenzii recente pozitive și negative, răspunsuri ale managerului
-2. Google Maps — rating exact, număr recenzii, program, adresă exactă
-3. Instagram — numele contului exact, număr followeri, număr postări
-4. Facebook — număr like-uri/followeri exact, număr check-in-uri
-5. Site-ul oficial dacă există — meniu, prețuri, facilități
+1. TripAdvisor — rating exact, număr recenzii, poziție în clasamentul local, recenzii recente pozitive și negative
+2. Google Maps — rating exact, număr recenzii, program, adresă
+3. Instagram — numele contului, număr followeri, număr postări
+4. Facebook — număr followeri, check-in-uri
+5. Site-ul oficial dacă există
 
-Returnează TOATE datele găsite cu cifre exacte.
-Dacă nu găsești o informație, spune explicit "negăsit".
-Caută și recenzii negative recente și cum răspunde restaurantul la ele."""
+Returnează TOATE datele găsite cu cifre exacte. Dacă nu găsești ceva, spune "negăsit"."""
 
-    message = get_client().messages.create(
-        model=MODEL_RESEARCH,
-        max_tokens=2000,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": research_prompt}],
-    )
+    messages = [{"role": "user", "content": research_prompt}]
+    tools    = [{"type": "web_search_20250305", "name": "web_search"}]
 
+    # Agentic loop — Claude poate face mai multe search-uri
+    for _ in range(5):  # max 5 iterații
+        response = get_client().messages.create(
+            model=MODEL_RESEARCH,
+            max_tokens=2000,
+            tools=tools,
+            messages=messages,
+        )
+
+        # Dacă s-a terminat cu text → returnăm rezultatul
+        if response.stop_reason == "end_turn":
+            result_text = ""
+            for block in response.content:
+                if hasattr(block, "text") and block.text:
+                    result_text += block.text
+            print(f"✓ Research complet pentru {biz} ({len(result_text)} caractere)")
+            return result_text
+
+        # Dacă a folosit tool-uri → adăugăm rezultatele și continuăm
+        if response.stop_reason == "tool_use":
+            # Adăugăm răspunsul asistentului în conversație
+            messages.append({"role": "assistant", "content": response.content})
+
+            # Construim tool_result pentru fiecare tool_use block
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    # Web search returnează rezultatele în block.content dacă există
+                    # altfel Claude le procesează intern
+                    tool_results.append({
+                        "type":        "tool_result",
+                        "tool_use_id": block.id,
+                        "content":     "Search efectuat.",
+                    })
+
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        # Alt stop reason — ieșim
+        break
+
+    # Fallback — extragem orice text disponibil din ultimul răspuns
     result_text = ""
-    for block in message.content:
-        if hasattr(block, "text"):
+    for block in response.content:
+        if hasattr(block, "text") and block.text:
             result_text += block.text
 
-    print(f"✓ Research complet pentru {biz} ({len(result_text)} caractere)")
-    return result_text
+    print(f"✓ Research finalizat pentru {biz} ({len(result_text)} caractere)")
+    return result_text or f"Nu s-au găsit date specifice pentru {biz} din {city}."
 
 
 def generate_audit_content(biz: str, city: str, biz_type: str, research_data: str) -> dict:
@@ -86,8 +120,8 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
   ],
   "s1_subtitle": "Ce am descoperit despre {biz} în urma cercetării noastre directe",
   "s1_body": [
-    "Paragraf 1 — prezentare generală bazată pe datele reale găsite, 2-3 propoziții SPECIFICE cu cifre reale.",
-    "Paragraf 2 — situația digitală actuală cu probleme concrete identificate în research.",
+    "Paragraf 1 — prezentare generală cu cifre reale găsite.",
+    "Paragraf 2 — situația digitală actuală cu probleme concrete.",
     "Paragraf 3 — concluzie și oportunitate principală."
   ],
   "s1_attn": [
@@ -105,16 +139,16 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
     {{
       "num": "01",
       "title": "Problemă 1 specifică identificată în research",
-      "body": "Descriere detaliată bazată pe datele reale, 2-3 propoziții cu cifre concrete.",
+      "body": "Descriere detaliată cu cifre concrete din research, 2-3 propoziții.",
       "manual": "X h/săpt.",
       "ai": "Y min",
       "saving": "-Z min",
-      "review_bad": "Recenzie negativă reală găsită în research (sau exemplu realist dacă nu s-a găsit).",
-      "review_manager": "Răspuns slab actual găsit în research (sau null dacă nu există).",
-      "review_good": "Răspuns profesional generat de AI specific pentru {biz} — complet, empatic.",
+      "review_bad": "Recenzie negativă reală găsită sau exemplu realist.",
+      "review_manager": null,
+      "review_good": "Răspuns profesional AI specific pentru {biz}.",
       "example_box": null,
       "before_after": null,
-      "cta_text": "Text CTA specific pentru această problemă."
+      "cta_text": "Text CTA specific."
     }},
     {{
       "num": "02",
@@ -126,7 +160,7 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
       "review_bad": null,
       "review_manager": null,
       "review_good": null,
-      "example_box": ["Postare Instagram generată pentru {biz}", "Text complet postare cu emoji și hashtag-uri locale #{city}"],
+      "example_box": ["Postare Instagram pentru {biz}", "Text postare cu emoji și hashtag-uri #{city}"],
       "before_after": null,
       "cta_text": "Text CTA specific."
     }},
@@ -142,8 +176,8 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
       "review_good": null,
       "example_box": null,
       "before_after": [
-        ["Descriere meniu actuală — scurtă și neinspirantă", "Descriere rescrisă cu storytelling culinar specific {biz}"],
-        ["Al doilea preparat — descriere plată", "Al doilea preparat — rescris cu ingrediente și poveste"]
+        ["Descriere meniu actuală neinspirantă", "Descriere rescrisă cu storytelling culinar"],
+        ["Al doilea preparat plat", "Al doilea preparat cu poveste"]
       ],
       "cta_text": "Text CTA specific."
     }},
@@ -157,7 +191,7 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
       "review_bad": null,
       "review_manager": null,
       "review_good": null,
-      "example_box": ["Template DM rezervare pentru {biz}", "Bună ziua! Mulțumim pentru mesaj. Pentru rezervări la {biz} vă rugăm să ne spuneți: data, ora și numărul de persoane. Confirmăm în 30 min! 🍽️"],
+      "example_box": ["Template DM rezervare {biz}", "Bună ziua! Pentru rezervări la {biz} vă rugăm: data, ora, nr. persoane. Confirmăm în 30 min! 🍽️"],
       "before_after": null,
       "cta_text": "Text CTA specific."
     }},
@@ -171,15 +205,15 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
       "review_bad": null,
       "review_manager": null,
       "review_good": null,
-      "example_box": ["Card recenzii bilingv pentru {biz}", "🇷🇴 Sunteți la {biz}! Dacă v-a plăcut, lăsați-ne o recenzie pe Google/TripAdvisor. [QR]\\n🇬🇧 Enjoying {biz}? Please leave us a review on Google/TripAdvisor! [QR]"],
+      "example_box": ["Card recenzii bilingv {biz}", "🇷🇴 La {biz}! Lăsați o recenzie pe Google/TripAdvisor [QR]\\n🇬🇧 At {biz}! Leave a review on Google/TripAdvisor [QR]"],
       "before_after": null,
-      "cta_text": "Text CTA final motivațional."
+      "cta_text": "Text CTA motivațional final."
     }}
   ],
   "total_manual": "~12h/săpt.",
   "total_ai": "~1.5h/săpt.",
-  "s2_subtitle": "Sarcini repetitive identificate — cu exemple reale generate pentru {biz}",
-  "s3_subtitle": "Selecție specifică pentru {biz} — toate gratuite sau aproape gratuite",
+  "s2_subtitle": "Sarcini repetitive identificate — cu exemple reale pentru {biz}",
+  "s3_subtitle": "Selecție specifică pentru {biz} — gratuite sau aproape gratuite",
   "s4_subtitle": "Trei acțiuni prioritare — specifice situației {biz}",
   "s4_intro": "Intro specific pentru {biz} bazat pe datele reale găsite.",
   "weeks": [
@@ -187,7 +221,7 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
       "SĂPTĂMÂNA 1",
       "URGENT: Prima acțiune critică pentru {biz}",
       [
-        {{"day": "Luni — 30 min", "action": "Acțiune concretă specifică pentru {biz}", "note": "Notă practică"}},
+        {{"day": "Luni — 30 min", "action": "Acțiune concretă pentru {biz}", "note": "Notă practică"}},
         {{"day": "Miercuri — 20 min", "action": "A doua acțiune", "note": "Notă"}},
         {{"day": "Vineri — 15 min", "action": "A treia acțiune", "note": "Notă"}}
       ]
@@ -212,7 +246,7 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
     ]
   ],
   "s5_subtitle": "Dacă preferi să nu construiești tu sistemul de la zero",
-  "s5_intro": "Intro specific pentru {biz} — ce conține pachetul și de ce e relevant pentru situația lor.",
+  "s5_intro": "Intro specific pentru {biz} — relevant pentru situația lor concretă.",
   "urgency_lines": [
     "Linie urgență 1 cu cifre reale despre {biz}.",
     "Linie urgență 2 specifică situației găsite.",
@@ -222,8 +256,8 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
 }}
 
 IMPORTANT:
-- Folosește EXCLUSIV datele reale din research — nu inventa cifre
-- Dacă o cifră nu e găsită, marchează cu ~ sau N/A
+- Folosește EXCLUSIV datele reale din research
+- Dacă cifra nu e găsită → marchează cu ~ sau N/A
 - Tot conținutul în română
 - JSON valid, nimic altceva"""
 
@@ -246,8 +280,8 @@ IMPORTANT:
 
 def enrich_restaurant_data(R: dict) -> dict:
     """
-    1. Caută date reale via web search (Haiku)
-    2. Generează audit personalizat (Sonnet)
+    1. Research cu Haiku + web search
+    2. Generare audit cu Sonnet
     3. Îmbogățește dicționarul R
     """
     biz      = R.get("bizName", R.get("name", "Restaurant"))
@@ -255,14 +289,11 @@ def enrich_restaurant_data(R: dict) -> dict:
     biz_type = R.get("type", "restaurant")
 
     try:
-        # PASUL 1: Research cu Haiku + web search
         research_data = research_restaurant(biz, city)
 
-        # PASUL 2: Generare cu Sonnet
         print(f"🤖 Generare audit AI pentru: {biz} ({city})")
         ai_data = generate_audit_content(biz, city, biz_type, research_data)
 
-        # PASUL 3: Suprascrie câmpurile din R
         fields = [
             "emotional_hook", "stats",
             "s1_subtitle", "s1_body", "s1_attn", "s1_metrics",
@@ -275,7 +306,6 @@ def enrich_restaurant_data(R: dict) -> dict:
             if field in ai_data and ai_data[field]:
                 R[field] = ai_data[field]
 
-        # s1_attn trebuie să fie tuplu pentru build_audit
         if isinstance(R.get("s1_attn"), list) and len(R["s1_attn"]) == 2:
             R["s1_attn"] = tuple(R["s1_attn"])
 
