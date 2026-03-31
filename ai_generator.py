@@ -1,62 +1,66 @@
 """
-ADVISIO — Generator conținut AI cu Gemini 2.5 Flash + Google Search
-=====================================================================
-1. Caută date reale despre restaurant via Google Search Grounding
-2. Generează audit personalizat bazat pe datele reale găsite
+ADVISIO — Generator conținut AI cu Claude + Web Search
+========================================================
+1. Caută date reale despre restaurant (TripAdvisor, Google, Instagram, Facebook)
+   folosind web search nativ Anthropic — model Haiku (ieftin)
+2. Generează audit personalizat bazat pe datele reale găsite — model Sonnet
 """
 import os
 import json
-from google import genai
-from google.genai import types
+import anthropic
 
 _client = None
 
 def get_client():
     global _client
     if _client is None:
-        _client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
+        _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
     return _client
 
-MODEL = "gemini-2.0-flash"
+# Haiku — ieftin, suficient pentru web search
+MODEL_RESEARCH  = "claude-haiku-4-5-20251001"
+# Sonnet — calitate bună pentru generarea auditului
+MODEL_GENERATE  = "claude-sonnet-4-6"
 
 
 def research_restaurant(biz: str, city: str) -> str:
     """
-    Caută date reale despre restaurant folosind Google Search Grounding.
-    Returnează un string cu toate datele găsite.
+    Caută date reale despre restaurant folosind web search Claude Haiku.
     """
     print(f"🔍 Căutăm date reale pentru: {biz} ({city})")
 
     research_prompt = f"""Caută informații reale și concrete despre restaurantul "{biz}" din {city}, România.
 
 Caută pe:
-1. TripAdvisor — rating exact, număr recenzii, poziție în clasamentul local (ex: #3 din 45), recenzii recente pozitive și negative
+1. TripAdvisor — rating exact, număr recenzii, poziție în clasamentul local (ex: #3 din 45), recenzii recente pozitive și negative, răspunsuri ale managerului
 2. Google Maps — rating exact, număr recenzii, program, adresă exactă
-3. Instagram — numele contului exact, număr followeri, număr postări, frecvența postărilor
+3. Instagram — numele contului exact, număr followeri, număr postări
 4. Facebook — număr like-uri/followeri exact, număr check-in-uri
 5. Site-ul oficial dacă există — meniu, prețuri, facilități
 
-Returnează TOATE datele găsite cu cifre exacte. Dacă nu găsești o informație, spune explicit "negăsit".
-Caută și recenzii negative recente și cum răspunde restaurantul la ele.
-Fii foarte specific — vreau cifre reale, nu estimări."""
+Returnează TOATE datele găsite cu cifre exacte.
+Dacă nu găsești o informație, spune explicit "negăsit".
+Caută și recenzii negative recente și cum răspunde restaurantul la ele."""
 
-    response = get_client().models.generate_content(
-        model=MODEL,
-        contents=research_prompt,
-        config=types.GenerateContentConfig(
-            tools=[types.Tool(google_search=types.GoogleSearch())],
-            temperature=0.3,
-        ),
+    message = get_client().messages.create(
+        model=MODEL_RESEARCH,
+        max_tokens=2000,
+        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+        messages=[{"role": "user", "content": research_prompt}],
     )
 
-    result_text = response.text or ""
+    result_text = ""
+    for block in message.content:
+        if hasattr(block, "text"):
+            result_text += block.text
+
     print(f"✓ Research complet pentru {biz} ({len(result_text)} caractere)")
     return result_text
 
 
 def generate_audit_content(biz: str, city: str, biz_type: str, research_data: str) -> dict:
     """
-    Generează conținutul auditului bazat pe datele reale cercetate.
+    Generează conținutul auditului bazat pe datele reale — model Sonnet.
     """
 
     prompt = f"""Ești un consultant de marketing digital specializat în restaurante din România.
@@ -223,18 +227,14 @@ IMPORTANT:
 - Tot conținutul în română
 - JSON valid, nimic altceva"""
 
-    response = get_client().models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.4,
-            max_output_tokens=6000,
-        ),
+    message = get_client().messages.create(
+        model=MODEL_GENERATE,
+        max_tokens=6000,
+        messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = response.text.strip()
+    raw = message.content[0].text.strip()
 
-    # Curăță markdown dacă există
     if "```" in raw:
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -246,19 +246,19 @@ IMPORTANT:
 
 def enrich_restaurant_data(R: dict) -> dict:
     """
-    1. Caută date reale despre restaurant via Google Search Grounding
-    2. Generează audit personalizat bazat pe datele găsite
-    3. Îmbogățește dicționarul R cu conținutul generat
+    1. Caută date reale via web search (Haiku)
+    2. Generează audit personalizat (Sonnet)
+    3. Îmbogățește dicționarul R
     """
     biz      = R.get("bizName", R.get("name", "Restaurant"))
     city     = R.get("city", "România")
     biz_type = R.get("type", "restaurant")
 
     try:
-        # PASUL 1: Google Search Grounding — date reale
+        # PASUL 1: Research cu Haiku + web search
         research_data = research_restaurant(biz, city)
 
-        # PASUL 2: Generare AI bazată pe datele reale
+        # PASUL 2: Generare cu Sonnet
         print(f"🤖 Generare audit AI pentru: {biz} ({city})")
         ai_data = generate_audit_content(biz, city, biz_type, research_data)
 
