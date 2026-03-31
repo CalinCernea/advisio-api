@@ -17,7 +17,7 @@ def get_client():
         _client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
     return _client
 
-MODEL = "gemini-2.5-flash-preview-05-20"
+MODEL = "gemini-2.0-flash"
 
 
 def research_restaurant(biz: str, city: str) -> str:
