@@ -1,8 +1,8 @@
 """
-ADVISIO — Generator conținut AI cu Claude + Web Search
+ADVISIO — Generator continut AI cu Claude + Web Search
 ========================================================
-1. Caută date reale despre restaurant via web search Anthropic (Haiku)
-2. Generează audit personalizat bazat pe datele reale găsite (Sonnet)
+1. Cauta date reale despre restaurant via web search Anthropic (Haiku)
+2. Genereaza audit personalizat bazat pe datele reale gasite (Sonnet)
 """
 import os
 import json
@@ -22,27 +22,31 @@ MODEL_GENERATE = "claude-sonnet-4-6"
 
 def research_restaurant(biz: str, city: str) -> str:
     """
-    Caută date reale despre restaurant folosind web search Claude.
-    Folosește agentic loop — continuă până când Claude termină cu un răspuns text final.
+    Cauta date reale despre restaurant folosind web search Claude Haiku.
+    Foloseste agentic loop pana cand Claude returneaza text final.
     """
-    print(f"🔍 Căutăm date reale pentru: {biz} ({city})")
+    print(f"Cautam date reale pentru: {biz} ({city})")
 
-    research_prompt = f"""Caută informații reale și concrete despre restaurantul "{biz}" din {city}, România.
+    research_prompt = f"""Cauta informatii reale si concrete despre restaurantul "{biz}" din {city}, Romania.
 
-Caută pe:
-1. TripAdvisor — rating exact, număr recenzii, poziție în clasamentul local, recenzii recente pozitive și negative
-2. Google Maps — rating exact, număr recenzii, program, adresă
-3. Instagram — numele contului, număr followeri, număr postări
-4. Facebook — număr followeri, check-in-uri
-5. Site-ul oficial dacă există
+IMPORTANT: Cauta SPECIFIC pentru {city} — nu alt oras. Daca gasesti rezultate pentru alt oras, ignora-le complet.
 
-Returnează TOATE datele găsite cu cifre exacte. Dacă nu găsești ceva, spune "negăsit"."""
+Cauta urmatoarele si returneaza cifre exacte:
+1. TripAdvisor "{biz}" {city} — rating exact (ex: 4.3 stele), numar recenzii, pozitie in clasament local (ex: #5 din 89 restaurante {city}), copiaza 1-2 recenzii negative recente si raspunsul managerului daca exista
+2. Google Maps "{biz}" {city} — rating exact, numar recenzii Google
+3. Instagram — cauta contul oficial al restaurantului {biz} din {city}, numar followeri exact, numar postari
+4. Facebook — pagina oficiala {biz} {city}, numar like-uri/followeri, numar check-in-uri
+5. Site oficial daca exista — adresa, program, tip bucatarie
+
+Daca nu gasesti date pentru o platforma, scrie explicit "negasit pe [platforma]".
+Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume similar din alte orase."""
 
     messages = [{"role": "user", "content": research_prompt}]
     tools    = [{"type": "web_search_20250305", "name": "web_search"}]
+    response = None
 
     # Agentic loop — Claude poate face mai multe search-uri
-    for _ in range(5):  # max 5 iterații
+    for _ in range(5):
         response = get_client().messages.create(
             model=MODEL_RESEARCH,
             max_tokens=2000,
@@ -50,125 +54,119 @@ Returnează TOATE datele găsite cu cifre exacte. Dacă nu găsești ceva, spune
             messages=messages,
         )
 
-        # Dacă s-a terminat cu text → returnăm rezultatul
+        # S-a terminat cu text final
         if response.stop_reason == "end_turn":
             result_text = ""
             for block in response.content:
                 if hasattr(block, "text") and block.text:
                     result_text += block.text
-            print(f"✓ Research complet pentru {biz} ({len(result_text)} caractere)")
+            print(f"Research complet pentru {biz} ({len(result_text)} caractere)")
             return result_text
 
-        # Dacă a folosit tool-uri → adăugăm rezultatele și continuăm
+        # A folosit tool-uri → continuam conversatia
         if response.stop_reason == "tool_use":
-            # Adăugăm răspunsul asistentului în conversație
             messages.append({"role": "assistant", "content": response.content})
-
-            # Construim tool_result pentru fiecare tool_use block
             tool_results = []
             for block in response.content:
                 if block.type == "tool_use":
-                    # Web search returnează rezultatele în block.content dacă există
-                    # altfel Claude le procesează intern
                     tool_results.append({
                         "type":        "tool_result",
                         "tool_use_id": block.id,
                         "content":     "Search efectuat.",
                     })
-
             messages.append({"role": "user", "content": tool_results})
             continue
 
-        # Alt stop reason — ieșim
         break
 
-    # Fallback — extragem orice text disponibil din ultimul răspuns
+    # Fallback — extragem orice text din ultimul raspuns
     result_text = ""
-    for block in response.content:
-        if hasattr(block, "text") and block.text:
-            result_text += block.text
+    if response:
+        for block in response.content:
+            if hasattr(block, "text") and block.text:
+                result_text += block.text
 
-    print(f"✓ Research finalizat pentru {biz} ({len(result_text)} caractere)")
-    return result_text or f"Nu s-au găsit date specifice pentru {biz} din {city}."
+    print(f"Research finalizat pentru {biz} ({len(result_text)} caractere)")
+    return result_text or f"Nu s-au gasit date specifice pentru {biz} din {city}."
 
 
 def generate_audit_content(biz: str, city: str, biz_type: str, research_data: str) -> dict:
     """
-    Generează conținutul auditului bazat pe datele reale — model Sonnet.
+    Genereaza continutul auditului bazat pe datele reale cercetate — model Sonnet.
     """
 
-    prompt = f"""Ești un consultant de marketing digital specializat în restaurante din România.
+    prompt = f"""Esti un consultant de marketing digital specializat in restaurante din Romania.
 
-Ai cercetat restaurantul "{biz}" din {city} și ai găsit următoarele date REALE:
+Ai cercetat restaurantul "{biz}" din {city} si ai gasit urmatoarele date REALE:
 
 ---
 {research_data}
 ---
 
-Bazat EXCLUSIV pe datele de mai sus (nu inventa nimic), generează un audit AI complet.
-Dacă o cifră nu a fost găsită în research, folosește "N/A" sau o estimare realistă marcată cu "~".
+Bazat EXCLUSIV pe datele de mai sus (nu inventa nimic), genereaza un audit AI complet.
+Daca o cifra nu a fost gasita in research, foloseste "N/A" sau o estimare realista marcata cu "~".
 
-Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără markdown, fără ```json.
+Raspunde DOAR cu un obiect JSON valid, fara text inainte sau dupa, fara markdown, fara ```json.
 
 {{
-  "emotional_hook": "mesaj motivațional specific pentru {biz}, max 120 caractere",
+  "emotional_hook": "mesaj motivational specific pentru {biz}, max 120 caractere, fara diacritice",
   "stats": [
-    ["4.2 ★", "Rating TripAdvisor"],
+    ["4.2 stele", "Rating TripAdvisor"],
     ["#5", "din X restaurante {city}"],
     ["1.2K", "Followeri Instagram"],
     ["3.5K", "Facebook fans"]
   ],
-  "s1_subtitle": "Ce am descoperit despre {biz} în urma cercetării noastre directe",
+  "s1_subtitle": "Ce am descoperit despre {biz} in urma cercetarii noastre directe",
   "s1_body": [
-    "Paragraf 1 — prezentare generală cu cifre reale găsite.",
-    "Paragraf 2 — situația digitală actuală cu probleme concrete.",
-    "Paragraf 3 — concluzie și oportunitate principală."
+    "Paragraf 1 — prezentare generala cu cifre reale gasite, 2-3 propozitii SPECIFICE.",
+    "Paragraf 2 — situatia digitala actuala cu probleme concrete identificate in research.",
+    "Paragraf 3 — concluzie si oportunitate principala."
   ],
   "s1_attn": [
-    "ATENȚIE — Oportunitate critică identificată:",
-    "Descriere concretă bazată pe datele reale găsite pentru {biz}."
+    "ATENTIE — Oportunitate critica identificata:",
+    "Descriere concreta bazata pe datele reale gasite pentru {biz}."
   ],
   "s1_metrics": [
-    ["Reply rate recenzii", "situatie reala gasita", "target 90 zile", "CRITICĂ"],
-    ["Followeri Instagram", "cifra reala gasita", "target crestere", "RIDICATĂ"],
-    ["Prezență Google", "situatie reala", "optimizare target", "RIDICATĂ"],
+    ["Reply rate recenzii", "situatie reala gasita", "target 90 zile", "CRITICA"],
+    ["Followeri Instagram", "cifra reala gasita", "target crestere", "RIDICATA"],
+    ["Prezenta Google", "situatie reala", "optimizare target", "RIDICATA"],
     ["Social media", "situatie reala", "target", "MEDIE"],
     ["Recenzii noi", "rata actuala", "rata target", "MEDIE"]
   ],
   "losses": [
     {{
       "num": "01",
-      "title": "Problemă 1 specifică identificată în research",
-      "body": "Descriere detaliată cu cifre concrete din research, 2-3 propoziții.",
-      "manual": "X h/săpt.",
+      "title": "Problema 1 specifica identificata in research",
+      "body": "Descriere detaliata bazata pe datele reale, 2-3 propozitii cu cifre concrete.",
+      "manual": "X h/sapt.",
       "ai": "Y min",
       "saving": "-Z min",
-      "review_bad": "Recenzie negativă reală găsită sau exemplu realist.",
+      "review_bad": "Recenzie negativa reala gasita sau exemplu realist.",
       "review_manager": null,
-      "review_good": "Răspuns profesional AI specific pentru {biz}.",
+      "review_good": "Raspuns profesional AI specific pentru {biz}.",
       "example_box": null,
       "before_after": null,
       "cta_text": "Text CTA specific."
     }},
     {{
       "num": "02",
-      "title": "Problemă 2 specifică pentru {biz}",
-      "body": "Descriere detaliată, 2-3 propoziții.",
-      "manual": "X h/săpt.",
+      "title": "Problema 2 specifica pentru {biz}",
+      "body": "Descriere detaliata, 2-3 propozitii.",
+      "manual": "X h/sapt.",
       "ai": "Y min",
       "saving": "-Z min",
       "review_bad": null,
       "review_manager": null,
       "review_good": null,
-      "example_box": ["Postare Instagram pentru {biz}", "Text postare cu emoji și hashtag-uri #{city}"],
+      "example_box": ["Postare Instagram pentru {biz}", "Text postare cu emoji si hashtag-uri #{city}"],
       "before_after": null,
       "cta_text": "Text CTA specific."
     }},
     {{
       "num": "03",
-      "title": "Problemă 3 specifică pentru {biz}",
-      "body": "Descriere detaliată, 2-3 propoziții.",
-      "manual": "X h/săpt.",
+      "title": "Problema 3 specifica pentru {biz}",
+      "body": "Descriere detaliata, 2-3 propozitii.",
+      "manual": "X h/sapt.",
       "ai": "Y min",
       "saving": "-Z min",
       "review_bad": null,
@@ -176,89 +174,89 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
       "review_good": null,
       "example_box": null,
       "before_after": [
-        ["Descriere meniu actuală neinspirantă", "Descriere rescrisă cu storytelling culinar"],
-        ["Al doilea preparat plat", "Al doilea preparat cu poveste"]
+        ["Descriere meniu actuala scurta", "Descriere rescrisa cu storytelling culinar specific {biz}"],
+        ["Al doilea preparat plat", "Al doilea preparat cu poveste si ingrediente"]
       ],
       "cta_text": "Text CTA specific."
     }},
     {{
       "num": "04",
-      "title": "Problemă 4 specifică pentru {biz}",
-      "body": "Descriere detaliată, 2-3 propoziții.",
-      "manual": "X h/săpt.",
+      "title": "Problema 4 specifica pentru {biz}",
+      "body": "Descriere detaliata, 2-3 propozitii.",
+      "manual": "X h/sapt.",
       "ai": "Y min",
       "saving": "-Z min",
       "review_bad": null,
       "review_manager": null,
       "review_good": null,
-      "example_box": ["Template DM rezervare {biz}", "Bună ziua! Pentru rezervări la {biz} vă rugăm: data, ora, nr. persoane. Confirmăm în 30 min! 🍽️"],
+      "example_box": ["Template DM rezervare {biz}", "Buna ziua! Pentru rezervari la {biz} va rugam: data, ora, nr. persoane. Confirmam in 30 min!"],
       "before_after": null,
       "cta_text": "Text CTA specific."
     }},
     {{
       "num": "05",
-      "title": "Problemă 5 specifică pentru {biz}",
-      "body": "Descriere detaliată, 2-3 propoziții.",
-      "manual": "X h/săpt.",
+      "title": "Problema 5 specifica pentru {biz}",
+      "body": "Descriere detaliata, 2-3 propozitii.",
+      "manual": "X h/sapt.",
       "ai": "Y min",
       "saving": "-Z min",
       "review_bad": null,
       "review_manager": null,
       "review_good": null,
-      "example_box": ["Card recenzii bilingv {biz}", "🇷🇴 La {biz}! Lăsați o recenzie pe Google/TripAdvisor [QR]\\n🇬🇧 At {biz}! Leave a review on Google/TripAdvisor [QR]"],
+      "example_box": ["Card recenzii bilingv {biz}", "RO: La {biz}! Lasati o recenzie pe Google/TripAdvisor [QR]\\nEN: At {biz}! Leave a review on Google/TripAdvisor [QR]"],
       "before_after": null,
-      "cta_text": "Text CTA motivațional final."
+      "cta_text": "Text CTA motivational final."
     }}
   ],
-  "total_manual": "~12h/săpt.",
-  "total_ai": "~1.5h/săpt.",
+  "total_manual": "~12h/sapt.",
+  "total_ai": "~1.5h/sapt.",
   "s2_subtitle": "Sarcini repetitive identificate — cu exemple reale pentru {biz}",
-  "s3_subtitle": "Selecție specifică pentru {biz} — gratuite sau aproape gratuite",
-  "s4_subtitle": "Trei acțiuni prioritare — specifice situației {biz}",
-  "s4_intro": "Intro specific pentru {biz} bazat pe datele reale găsite.",
+  "s3_subtitle": "Selectie specifica pentru {biz} — gratuite sau aproape gratuite",
+  "s4_subtitle": "Trei actiuni prioritare — specifice situatiei {biz}",
+  "s4_intro": "Intro specific pentru {biz} bazat pe datele reale gasite.",
   "weeks": [
     [
-      "SĂPTĂMÂNA 1",
-      "URGENT: Prima acțiune critică pentru {biz}",
+      "SAPTAMANA 1",
+      "URGENT: Prima actiune critica pentru {biz}",
       [
-        {{"day": "Luni — 30 min", "action": "Acțiune concretă pentru {biz}", "note": "Notă practică"}},
-        {{"day": "Miercuri — 20 min", "action": "A doua acțiune", "note": "Notă"}},
-        {{"day": "Vineri — 15 min", "action": "A treia acțiune", "note": "Notă"}}
+        {{"day": "Luni — 30 min", "action": "Actiune concreta specifica pentru {biz}", "note": "Nota practica"}},
+        {{"day": "Miercuri — 20 min", "action": "A doua actiune", "note": "Nota"}},
+        {{"day": "Vineri — 15 min", "action": "A treia actiune", "note": "Nota"}}
       ]
     ],
     [
-      "SĂPTĂMÂNILE 2-3",
-      "Social media activ + automatizări",
+      "SAPTAMANILE 2-3",
+      "Social media activ + automatizari",
       [
-        {{"day": "Luni S2 — 30 min", "action": "Acțiune social media", "note": "Notă"}},
-        {{"day": "Miercuri S2 — 25 min", "action": "Configurare automatizări", "note": "Notă"}},
-        {{"day": "Luni S3 — 20 min", "action": "Extindere strategie", "note": "Notă"}}
+        {{"day": "Luni S2 — 30 min", "action": "Actiune social media", "note": "Nota"}},
+        {{"day": "Miercuri S2 — 25 min", "action": "Configurare automatizari", "note": "Nota"}},
+        {{"day": "Luni S3 — 20 min", "action": "Extindere strategie", "note": "Nota"}}
       ]
     ],
     [
-      "SĂPTĂMÂNA 4",
+      "SAPTAMANA 4",
       "Campanie recenzii + evaluare",
       [
-        {{"day": "Luni — 25 min", "action": "Campanie recenzii Google/TripAdvisor", "note": "Notă"}},
-        {{"day": "Miercuri — 20 min", "action": "Rescriere meniu online", "note": "Notă"}},
-        {{"day": "Vineri — 15 min", "action": "Evaluare rezultate", "note": "Notă"}}
+        {{"day": "Luni — 25 min", "action": "Campanie recenzii Google/TripAdvisor", "note": "Nota"}},
+        {{"day": "Miercuri — 20 min", "action": "Rescriere meniu online", "note": "Nota"}},
+        {{"day": "Vineri — 15 min", "action": "Evaluare rezultate", "note": "Nota"}}
       ]
     ]
   ],
-  "s5_subtitle": "Dacă preferi să nu construiești tu sistemul de la zero",
-  "s5_intro": "Intro specific pentru {biz} — relevant pentru situația lor concretă.",
+  "s5_subtitle": "Daca preferi sa nu construiesti tu sistemul de la zero",
+  "s5_intro": "Intro specific pentru {biz} — relevant pentru situatia lor concreta.",
   "urgency_lines": [
-    "Linie urgență 1 cu cifre reale despre {biz}.",
-    "Linie urgență 2 specifică situației găsite.",
-    "Linie urgență 3 motivațională."
+    "Linie urgenta 1 cu cifre reale despre {biz}.",
+    "Linie urgenta 2 specifica situatiei gasite.",
+    "Linie urgenta 3 motivationala."
   ],
-  "s5_closing": "Closing specific pentru {biz} — profesional, fără presiune."
+  "s5_closing": "Closing specific pentru {biz} — profesional, fara presiune."
 }}
 
 IMPORTANT:
-- Folosește EXCLUSIV datele reale din research
-- Dacă cifra nu e găsită → marchează cu ~ sau N/A
-- Tot conținutul în română
+- Foloseste EXCLUSIV datele reale din research — nu inventa cifre
+- Daca cifra nu e gasita → marcheza cu ~ sau N/A
+- Tot continutul fara diacritice (fara a, i, s, t cu semne)
 - JSON valid, nimic altceva"""
 
     message = get_client().messages.create(
@@ -282,16 +280,16 @@ def enrich_restaurant_data(R: dict) -> dict:
     """
     1. Research cu Haiku + web search
     2. Generare audit cu Sonnet
-    3. Îmbogățește dicționarul R
+    3. Imbogateste dictionarul R
     """
     biz      = R.get("bizName", R.get("name", "Restaurant"))
-    city     = R.get("city", "România")
+    city     = R.get("city", "Romania")
     biz_type = R.get("type", "restaurant")
 
     try:
         research_data = research_restaurant(biz, city)
 
-        print(f"🤖 Generare audit AI pentru: {biz} ({city})")
+        print(f"Generare audit AI pentru: {biz} ({city})")
         ai_data = generate_audit_content(biz, city, biz_type, research_data)
 
         fields = [
@@ -306,14 +304,15 @@ def enrich_restaurant_data(R: dict) -> dict:
             if field in ai_data and ai_data[field]:
                 R[field] = ai_data[field]
 
+        # s1_attn trebuie sa fie tuplu pentru build_audit
         if isinstance(R.get("s1_attn"), list) and len(R["s1_attn"]) == 2:
             R["s1_attn"] = tuple(R["s1_attn"])
 
-        print(f"✓ Audit personalizat generat cu succes pentru: {biz}")
+        print(f"Audit personalizat generat cu succes pentru: {biz}")
 
     except json.JSONDecodeError as e:
-        print(f"⚠ Eroare parsare JSON pentru {biz}: {e} — se folosesc placeholder-urile")
+        print(f"Eroare parsare JSON pentru {biz}: {e} — se folosesc placeholder-urile")
     except Exception as e:
-        print(f"⚠ Eroare generare AI pentru {biz}: {e} — se folosesc placeholder-urile")
+        print(f"Eroare generare AI pentru {biz}: {e} — se folosesc placeholder-urile")
 
     return R
