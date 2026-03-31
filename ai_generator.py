@@ -1,25 +1,28 @@
 """
-ADVISIO — Generator conținut AI cu Claude + Web Search
-========================================================
-1. Caută date reale despre restaurant (TripAdvisor, Google, Instagram, Facebook)
+ADVISIO — Generator conținut AI cu Gemini 2.5 Flash + Google Search
+=====================================================================
+1. Caută date reale despre restaurant via Google Search Grounding
 2. Generează audit personalizat bazat pe datele reale găsite
 """
 import os
 import json
-import anthropic
+from google import genai
+from google.genai import types
 
 _client = None
 
 def get_client():
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        _client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
     return _client
+
+MODEL = "gemini-2.5-flash-preview-04-17"
 
 
 def research_restaurant(biz: str, city: str) -> str:
     """
-    Caută date reale despre restaurant folosind web search via Claude.
+    Caută date reale despre restaurant folosind Google Search Grounding.
     Returnează un string cu toate datele găsite.
     """
     print(f"🔍 Căutăm date reale pentru: {biz} ({city})")
@@ -27,29 +30,27 @@ def research_restaurant(biz: str, city: str) -> str:
     research_prompt = f"""Caută informații reale și concrete despre restaurantul "{biz}" din {city}, România.
 
 Caută pe:
-1. TripAdvisor — rating, număr recenzii, poziție în clasamentul local, recenzii recente (pozitive și negative)
-2. Google Maps — rating, număr recenzii, program, adresă
-3. Instagram — numele contului, număr followeri, frecvența postărilor
-4. Facebook — număr like-uri/followeri, check-in-uri
-5. Site-ul oficial dacă există
+1. TripAdvisor — rating exact, număr recenzii, poziție în clasamentul local (ex: #3 din 45), recenzii recente pozitive și negative
+2. Google Maps — rating exact, număr recenzii, program, adresă exactă
+3. Instagram — numele contului exact, număr followeri, număr postări, frecvența postărilor
+4. Facebook — număr like-uri/followeri exact, număr check-in-uri
+5. Site-ul oficial dacă există — meniu, prețuri, facilități
 
-Returnează TOATE datele găsite în format structurat. Dacă nu găsești o informație, spune explicit "negăsit".
+Returnează TOATE datele găsite cu cifre exacte. Dacă nu găsești o informație, spune explicit "negăsit".
+Caută și recenzii negative recente și cum răspunde restaurantul la ele.
 Fii foarte specific — vreau cifre reale, nu estimări."""
 
-    message = get_client().messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": research_prompt}],
+    response = get_client().models.generate_content(
+        model=MODEL,
+        contents=research_prompt,
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            temperature=0.3,
+        ),
     )
 
-    # Extrage textul din răspuns (ignoră tool_use blocks)
-    result_text = ""
-    for block in message.content:
-        if hasattr(block, "text"):
-            result_text += block.text
-
-    print(f"✓ Research complet pentru {biz}")
+    result_text = response.text or ""
+    print(f"✓ Research complet pentru {biz} ({len(result_text)} caractere)")
     return result_text
 
 
@@ -166,7 +167,7 @@ Răspunde DOAR cu un obiect JSON valid, fără text înainte sau după, fără m
       "review_bad": null,
       "review_manager": null,
       "review_good": null,
-      "example_box": ["Card recenzii bilingv pentru {biz}", "🇷🇴 Sunteți la {biz}! Dacă v-a plăcut, lăsați-ne o recenzie pe Google/TripAdvisor. [QR]\n🇬🇧 Enjoying {biz}? Please leave us a review on Google/TripAdvisor! [QR]"],
+      "example_box": ["Card recenzii bilingv pentru {biz}", "🇷🇴 Sunteți la {biz}! Dacă v-a plăcut, lăsați-ne o recenzie pe Google/TripAdvisor. [QR]\\n🇬🇧 Enjoying {biz}? Please leave us a review on Google/TripAdvisor! [QR]"],
       "before_after": null,
       "cta_text": "Text CTA final motivațional."
     }}
@@ -222,16 +223,19 @@ IMPORTANT:
 - Tot conținutul în română
 - JSON valid, nimic altceva"""
 
-    message = get_client().messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=5000,
-        messages=[{"role": "user", "content": prompt}],
+    response = get_client().models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.4,
+            max_output_tokens=6000,
+        ),
     )
 
-    raw = message.content[0].text.strip()
+    raw = response.text.strip()
 
     # Curăță markdown dacă există
-    if raw.startswith("```"):
+    if "```" in raw:
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
@@ -242,7 +246,7 @@ IMPORTANT:
 
 def enrich_restaurant_data(R: dict) -> dict:
     """
-    1. Caută date reale despre restaurant via web search
+    1. Caută date reale despre restaurant via Google Search Grounding
     2. Generează audit personalizat bazat pe datele găsite
     3. Îmbogățește dicționarul R cu conținutul generat
     """
@@ -251,7 +255,7 @@ def enrich_restaurant_data(R: dict) -> dict:
     biz_type = R.get("type", "restaurant")
 
     try:
-        # PASUL 1: Web search — date reale
+        # PASUL 1: Google Search Grounding — date reale
         research_data = research_restaurant(biz, city)
 
         # PASUL 2: Generare AI bazată pe datele reale
@@ -274,12 +278,6 @@ def enrich_restaurant_data(R: dict) -> dict:
         # s1_attn trebuie să fie tuplu pentru build_audit
         if isinstance(R.get("s1_attn"), list) and len(R["s1_attn"]) == 2:
             R["s1_attn"] = tuple(R["s1_attn"])
-
-        # Suprascrie și câmpurile din deliverables/tools dacă e cazul
-        if "s5_intro" in ai_data:
-            R["s5_intro"] = ai_data["s5_intro"]
-        if "s5_closing" in ai_data:
-            R["s5_closing"] = ai_data["s5_closing"]
 
         print(f"✓ Audit personalizat generat cu succes pentru: {biz}")
 
