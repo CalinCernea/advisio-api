@@ -23,7 +23,7 @@ MODEL_GENERATE = "claude-sonnet-4-6"
 def research_restaurant(biz: str, city: str) -> str:
     """
     Cauta date reale despre restaurant folosind web search Claude Haiku.
-    Foloseste agentic loop pana cand Claude returneaza text final.
+    Agentic loop corect — rezultatele search sunt transmise inapoi din response.content.
     """
     print(f"Cautam date reale pentru: {biz} ({city})")
 
@@ -45,8 +45,8 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
     tools    = [{"type": "web_search_20250305", "name": "web_search"}]
     response = None
 
-    # Agentic loop — Claude poate face mai multe search-uri
-    for _ in range(5):
+    # Agentic loop — Claude face search-uri pana termina
+    for _ in range(8):
         response = get_client().messages.create(
             model=MODEL_RESEARCH,
             max_tokens=2000,
@@ -54,7 +54,7 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
             messages=messages,
         )
 
-        # S-a terminat cu text final
+        # Terminat cu text final — returnam rezultatul
         if response.stop_reason == "end_turn":
             result_text = ""
             for block in response.content:
@@ -63,18 +63,20 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
             print(f"Research complet pentru {biz} ({len(result_text)} caractere)")
             return result_text
 
-        # A folosit tool-uri → continuam conversatia
+        # A folosit tool-uri → adaugam intregul response.content la conversatie
+        # Rezultatele search-ului sunt DEJA in response.content ca tool_result blocks
+        # Nu trebuie sa trimitem nimic manual — doar continuam conversatia
         if response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    tool_results.append({
-                        "type":        "tool_result",
-                        "tool_use_id": block.id,
-                        "content":     "Search efectuat.",
-                    })
-            messages.append({"role": "user", "content": tool_results})
+            # Adaugam raspunsul asistentului (care contine si rezultatele search)
+            messages.append({
+                "role": "assistant",
+                "content": response.content,
+            })
+            # Trimitem un mesaj de continuare gol — Claude stie sa continue
+            messages.append({
+                "role": "user",
+                "content": "Continua cu analiza si returneaza datele gasite.",
+            })
             continue
 
         break
@@ -92,7 +94,7 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
 
 def generate_audit_content(biz: str, city: str, biz_type: str, research_data: str) -> dict:
     """
-    Genereaza continutul auditului bazat pe datele reale cercetate — model Sonnet.
+    Genereaza continutul auditului bazat pe datele reale — model Sonnet.
     """
 
     prompt = f"""Esti un consultant de marketing digital specializat in restaurante din Romania.
@@ -256,7 +258,7 @@ Raspunde DOAR cu un obiect JSON valid, fara text inainte sau dupa, fara markdown
 IMPORTANT:
 - Foloseste EXCLUSIV datele reale din research — nu inventa cifre
 - Daca cifra nu e gasita → marcheza cu ~ sau N/A
-- Tot continutul fara diacritice (fara a, i, s, t cu semne)
+- Tot continutul fara diacritice romanesti
 - JSON valid, nimic altceva"""
 
     message = get_client().messages.create(
@@ -278,7 +280,7 @@ IMPORTANT:
 
 def enrich_restaurant_data(R: dict) -> dict:
     """
-    1. Research cu Haiku + web search
+    1. Research cu Haiku + web search (agentic loop corect)
     2. Generare audit cu Sonnet
     3. Imbogateste dictionarul R
     """
