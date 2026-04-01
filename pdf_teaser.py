@@ -1,6 +1,5 @@
 """
-ADVISIO — Generator Teaser PDF (returnează bytes)
-Adaptat din teaser_teatris.py — returnează io.BytesIO în loc să scrie pe disk.
+ADVISIO — Generator Teaser PDF (returneaza bytes)
 """
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -53,7 +52,6 @@ THEMES = {
 
 
 def build_teaser(R: dict) -> bytes:
-    """Generează teaser-ul PDF și returnează bytes."""
     T = THEMES.get(R.get("theme", "navy_gold"), THEMES["navy_gold"])
     BG      = colors.HexColor(T["bg"])
     ACC     = colors.HexColor(T["accent"])
@@ -76,7 +74,7 @@ def build_teaser(R: dict) -> bytes:
     CW = W - 2 * MARGIN
 
     biz  = R.get("name", R.get("bizName", "Restaurant"))
-    city = R.get("subtitle", R.get("city", "România"))
+    city = R.get("subtitle", R.get("city", "Romania"))
 
     def sp(h=8):
         return Spacer(1, h)
@@ -94,7 +92,6 @@ def build_teaser(R: dict) -> bytes:
     body   = S('body')
     bold_s = S('bold', fontName='Helvetica-Bold')
 
-    # ── Header / Footer ─────────────────────────────────────────
     def hf(c, doc):
         pg = doc.page
         c.saveState()
@@ -118,15 +115,14 @@ def build_teaser(R: dict) -> bytes:
             c.rect(0, H - 6 * mm, W, 6 * mm, fill=1, stroke=0)
         c.setFillColor(TEXT_L)
         c.setFont("Helvetica", 7)
-        c.drawString(15 * mm, 8 * mm, f"Preview gratuit — Pregătit exclusiv pentru {biz}")
+        c.drawString(15 * mm, 8 * mm, f"Preview gratuit — Pregatit exclusiv pentru {biz}")
         c.drawCentredString(W / 2, 8 * mm, "Advisio AI Audit | 2026")
         c.drawRightString(W - 15 * mm, 8 * mm, f"Pagina {pg - 1}")
         c.restoreState()
 
-    # ── Section header ──────────────────────────────────────────
     def sec_hdr(num, title, sub):
         return [
-            Paragraph(f"SECȚIUNEA {num}",
+            Paragraph(f"SECTIUNEA {num}",
                       S('sl', fontName='Helvetica-Bold', fontSize=8,
                         textColor=ACC, leading=12, spaceAfter=2)),
             Paragraph(title,
@@ -139,15 +135,14 @@ def build_teaser(R: dict) -> bytes:
             sp(6),
         ]
 
-    # ── Time table ──────────────────────────────────────────────
     def tt(m, a, sv):
         lbl = S('l', fontSize=8, textColor=TEXT_M, leading=11,
                 alignment=TA_CENTER, spaceAfter=0)
         ac = T["accent"]
         d = [
-            [Paragraph("Timp manual / săpt.", lbl),
+            [Paragraph("Timp manual / sapt.", lbl),
              Paragraph("Cu AI", lbl),
-             Paragraph("Economie / săpt.", lbl)],
+             Paragraph("Economie / sapt.", lbl)],
             [Paragraph(f'<font size="20" color="{ac}"><b>{m}</b></font>',
                        S('v', alignment=TA_CENTER, spaceAfter=0)),
              Paragraph(f'<font size="20" color="{ac}"><b>{a}</b></font>',
@@ -167,7 +162,6 @@ def build_teaser(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Loss header ─────────────────────────────────────────────
     def lh(num, title):
         t = Table([[
             Paragraph(num,
@@ -187,7 +181,6 @@ def build_teaser(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Red box ─────────────────────────────────────────────────
     def rbox(text, bg=None, brd=None):
         if bg is None:
             bg = colors.HexColor("#FFF0F0")
@@ -209,7 +202,6 @@ def build_teaser(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Info box ────────────────────────────────────────────────
     def ibox(lbl, txt, bg=None, brd=None):
         if bg is None:
             bg = ACC_LT
@@ -233,7 +225,6 @@ def build_teaser(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Attention box ───────────────────────────────────────────
     def attn(b, n):
         t = Table([[Paragraph(
             f'<b>{b}</b> {n}',
@@ -251,12 +242,11 @@ def build_teaser(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Metrics table ───────────────────────────────────────────
     def metrics_tbl(rows):
-        hdr = ['Indicator', 'Situația actuală', 'Target 90 zile', 'Urgență']
+        hdr = ['Indicator', 'Situatia actuala', 'Target 90 zile', 'Urgenta']
         uc  = {
-            'CRITICĂ':  URG_CLR,
-            'RIDICATĂ': colors.HexColor("#E67E22"),
+            'CRITICA':  URG_CLR,
+            'RIDICATA': colors.HexColor("#E67E22"),
             'MEDIE':    GREEN,
         }
         cw2 = [CW * p for p in [0.26, 0.30, 0.25, 0.19]]
@@ -286,7 +276,6 @@ def build_teaser(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Clickable button flowable ────────────────────────────────
     class Btn(Flowable):
         def __init__(self, tbl, url, w):
             Flowable.__init__(self)
@@ -303,7 +292,6 @@ def build_teaser(R: dict) -> bytes:
             self.canv.linkURL(self.url, (0, 0, self.w, self._h),
                               relative=1, thickness=0)
 
-    # ── COVER ───────────────────────────────────────────────────
     def cover():
         s = []
         s.append(sp(70))
@@ -340,8 +328,7 @@ def build_teaser(R: dict) -> bytes:
                             S('rt', fontName='Helvetica-Bold', fontSize=13,
                               textColor=WHITE, leading=18, spaceAfter=10)))
         hook = R.get("emotional_hook",
-                     f"{biz} merită o prezență digitală la fel de bună "
-                     f"ca experiența din restaurant.")
+                     f"{biz} merita o prezenta digitala la fel de buna ca experienta din restaurant.")
         hook_tbl = Table([[Paragraph(
             f'<i>{hook}</i>',
             S('hook', fontName='Helvetica-Oblique', fontSize=12,
@@ -374,7 +361,7 @@ def build_teaser(R: dict) -> bytes:
         card_dark = colors.HexColor(lighten(T["bg"], 20))
         stats = R.get("stats", [
             ("—", "Rating TripAdvisor"),
-            ("—", "Poziție locală"),
+            ("—", "Pozitie locala"),
             ("—", "Followeri Instagram"),
             ("—", "Facebook fans"),
         ])
@@ -400,9 +387,9 @@ def build_teaser(R: dict) -> bytes:
                              textColor=colors.HexColor("#CCCCCC"),
                              leading=12, spaceAfter=2)
         fd = [
-            [Paragraph("PREGĂTIT PENTRU", cfl),
+            [Paragraph("PREGATIT PENTRU", cfl),
              Paragraph(f"{biz} | {city}", cfv)],
-            [Paragraph("PREGĂTIT DE", cfl),
+            [Paragraph("PREGATIT DE", cfl),
              Paragraph("Advisio AI Audit | 2026", cfv)],
         ]
         ft = Table(fd, colWidths=[40 * mm, CW - 40 * mm])
@@ -416,7 +403,6 @@ def build_teaser(R: dict) -> bytes:
         s.append(PageBreak())
         return s
 
-    # ── CTA PAGE ────────────────────────────────────────────────
     def cta_page():
         s = []
         s.append(sp(20))
@@ -426,20 +412,20 @@ def build_teaser(R: dict) -> bytes:
               textColor=TEXT_D, leading=28, spaceAfter=8, alignment=TA_LEFT),
         ))
         s.append(Paragraph(
-            "Auditul complet conține încă 7 pagini:",
+            "Auditul complet contine inca 7 pagini:",
             S('ctasub', fontSize=13, textColor=TEXT_M,
               leading=18, spaceAfter=12, alignment=TA_LEFT),
         ))
         s.append(sp(6))
         items = [
-            ("✦", "3 pierderi de timp suplimentare",
-             "cu exemple generate specifice pentru restaurantul tău"),
-            ("✦", "Instrumentele AI recomandate",
-             "gratuite sau aproape gratuite — fără cunoștințe tehnice"),
-            ("✦", "Planul de acțiune 30 de zile",
-             "săptămână cu săptămână, acțiune cu acțiune"),
-            ("✦", "Diagnosticul complet al prezenței digitale",
-             "cu toate datele și prioritățile"),
+            ("\u2746", "3 pierderi de timp suplimentare",
+             "cu exemple generate specifice pentru restaurantul tau"),
+            ("\u2746", "Instrumentele AI recomandate",
+             "gratuite sau aproape gratuite — fara cunostinte tehnice"),
+            ("\u2746", "Planul de actiune 30 de zile",
+             "saptamana cu saptamana, actiune cu actiune"),
+            ("\u2746", "Diagnosticul complet al prezentei digitale",
+             "cu toate datele si prioritatile"),
         ]
         ac = T["accent"]
         for icon, title2, desc2 in items:
@@ -473,13 +459,13 @@ def build_teaser(R: dict) -> bytes:
                   leading=14, spaceAfter=6),
             ),
             Paragraph(
-                "Fiecare zi fără o prezență digitală optimizată înseamnă "
-                "clienți pierduți în favoarea competiției.",
+                "Fiecare zi fara o prezenta digitala optimizata inseamna "
+                "clienti pierduti in favoarea competitiei.",
                 S('u2', fontSize=9.5, textColor=colors.HexColor("#DDDDDD"),
                   leading=14, spaceAfter=6),
             ),
             Paragraph(
-                "Auditul complet îți arată exact cum să rezolvi asta.",
+                "Auditul complet iti arata exact cum sa rezolvi asta.",
                 S('u3', fontName='Helvetica-Bold', fontSize=10,
                   textColor=ACC, leading=14, spaceAfter=0),
             ),
@@ -506,8 +492,7 @@ def build_teaser(R: dict) -> bytes:
             Paragraph("VREAU AUDITUL COMPLET — 97 USD", bl1),
             sp(3),
             Paragraph(
-                "Click aici \u2192 plată cu cardul \u2192 "
-                "primești auditul complet imediat după plată",
+                "Click aici \u2192 plata cu cardul \u2192 primesti auditul complet imediat dupa plata",
                 bl2,
             ),
         ]]], colWidths=[CW])
@@ -522,14 +507,12 @@ def build_teaser(R: dict) -> bytes:
         s.append(Btn(bd, payment_url, CW))
         s.append(sp(10))
         s.append(Paragraph(
-            "O singură plată de 97 USD. Fără abonament. "
-            "Primești auditul complet imediat după plată.",
+            "O singura plata de 97 USD. Fara abonament. Primesti auditul complet imediat dupa plata.",
             S('note', fontSize=8.5, textColor=TEXT_L,
               leading=13, spaceAfter=0, alignment=TA_CENTER),
         ))
         return s
 
-    # ── BUILD ────────────────────────────────────────────────────
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -554,9 +537,8 @@ def build_teaser(R: dict) -> bytes:
     # S2 — primele 2 pierderi
     s += sec_hdr("2", "Cele Mai Mari 5 Pierderi de Timp", R.get("s2_subtitle", ""))
     s.append(Paragraph(
-        "<b>Previzualizare:</b> mai jos găsești primele 2 din cele 5 pierderi de timp "
-        "identificate. Auditul complet conține toate 5 — cu exemple generate și soluțiile "
-        "concrete.",
+        "<b>Previzualizare:</b> mai jos gasesti primele 2 din cele 5 pierderi de timp "
+        "identificate. Auditul complet contine toate 5 — cu exemple generate si solutiile concrete.",
         S('pn', fontSize=9.5, textColor=colors.HexColor("#555555"),
           leading=14, spaceAfter=10, alignment=TA_LEFT,
           fontName='Helvetica-Oblique'),
@@ -571,36 +553,29 @@ def build_teaser(R: dict) -> bytes:
         s.append(tt(loss["manual"], loss["ai"], loss["saving"]))
         s.append(sp(8))
         if loss.get("review_bad"):
-            s.append(Paragraph(
-                "Iată recenzia reală și răspunsul actual vs. varianta profesională:",
-                bold_s,
-            ))
+            s.append(Paragraph("Iata recenzia reala si raspunsul actual vs. varianta profesionala:", bold_s))
             s.append(rbox(loss["review_bad"]))
         if loss.get("review_manager"):
             s.append(sp(4))
-            s.append(Paragraph("Răspuns actual (extras):", bold_s))
+            s.append(Paragraph("Raspuns actual (extras):", bold_s))
             s.append(rbox(loss["review_manager"],
                           bg=colors.HexColor("#FFF8F0"),
                           brd=colors.HexColor("#E67E22")))
         if loss.get("review_good"):
             s.append(sp(4))
-            s.append(Paragraph(
-                "Răspuns generat de AI — gata de publicat:", bold_s,
-            ))
+            s.append(Paragraph("Raspuns generat de AI — gata de publicat:", bold_s))
             s.append(rbox(loss["review_good"],
                           bg=colors.HexColor("#EAF5EE"), brd=GREEN))
         if loss.get("example_box"):
-            s.append(Paragraph("Iată o postare gata de publicat:", bold_s))
+            s.append(Paragraph("Iata o postare gata de publicat:", bold_s))
             s.append(sp(4))
             s.append(ibox(*loss["example_box"]))
         if i < len(preview_losses) - 1:
             s.append(sp(14))
 
-    # Separator cutoff
     s.append(sp(16))
     cutoff = Table([[Paragraph(
-        "· · · · · · · · · · · · · · CONTINUĂ ÎN AUDITUL COMPLET "
-        "· · · · · · · · · · · · · ·",
+        "· · · · · · · · · · · · · · CONTINUA IN AUDITUL COMPLET · · · · · · · · · · · · · ·",
         S('cut', fontName='Helvetica-Bold', fontSize=9,
           textColor=ACC, leading=14, spaceAfter=0, alignment=TA_CENTER),
     )]], colWidths=[CW])
