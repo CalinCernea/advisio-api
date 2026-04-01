@@ -1,6 +1,5 @@
 """
-ADVISIO — Generator Audit Complet (returnează bytes)
-Adaptat din audit_template.py — nu mai scrie pe disk, returnează io.BytesIO.
+ADVISIO — Generator Audit Complet (returneaza bytes)
 """
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -53,7 +52,6 @@ THEMES = {
 
 
 def build_audit(R: dict) -> bytes:
-    """Generează auditul complet și returnează bytes PDF."""
     T = THEMES.get(R.get("theme", "navy_gold"), THEMES["navy_gold"])
     BG      = colors.HexColor(T["bg"])
     ACC     = colors.HexColor(T["accent"])
@@ -92,9 +90,8 @@ def build_audit(R: dict) -> bytes:
     bold_s = S('bold', fontName='Helvetica-Bold')
 
     biz  = R.get("name", R.get("bizName", "Restaurant"))
-    city = R.get("subtitle", R.get("city", "România"))
+    city = R.get("subtitle", R.get("city", "Romania"))
 
-    # ── Header / Footer ─────────────────────────────────────────
     def hf(c, doc):
         pg = doc.page
         c.saveState()
@@ -118,16 +115,14 @@ def build_audit(R: dict) -> bytes:
             c.rect(0, H - 6 * mm, W, 6 * mm, fill=1, stroke=0)
         c.setFillColor(TEXT_L)
         c.setFont("Helvetica", 7)
-        c.drawString(15 * mm, 8 * mm,
-                     f"Confidential — Pregătit exclusiv pentru {biz}")
+        c.drawString(15 * mm, 8 * mm, f"Confidential — Pregatit exclusiv pentru {biz}")
         c.drawCentredString(W / 2, 8 * mm, "Advisio AI Audit | 2026 | Confidential")
         c.drawRightString(W - 15 * mm, 8 * mm, f"Pagina {pg - 1}")
         c.restoreState()
 
-    # ── Section header ──────────────────────────────────────────
     def sec_hdr(num, title, sub):
         return [
-            Paragraph(f"SECȚIUNEA {num}",
+            Paragraph(f"SECTIUNEA {num}",
                       S('sl', fontName='Helvetica-Bold', fontSize=8,
                         textColor=ACC, leading=12, spaceAfter=2)),
             Paragraph(title,
@@ -140,15 +135,14 @@ def build_audit(R: dict) -> bytes:
             sp(6),
         ]
 
-    # ── Time table ──────────────────────────────────────────────
     def tt(m, a, sv):
         lbl = S('l', fontSize=8, textColor=TEXT_M, leading=11,
                 alignment=TA_CENTER, spaceAfter=0)
         ac = T["accent"]
         d = [
-            [Paragraph("Timp manual / săpt.", lbl),
+            [Paragraph("Timp manual / sapt.", lbl),
              Paragraph("Cu AI", lbl),
-             Paragraph("Economie / săpt.", lbl)],
+             Paragraph("Economie / sapt.", lbl)],
             [Paragraph(f'<font size="20" color="{ac}"><b>{m}</b></font>',
                        S('v', alignment=TA_CENTER, spaceAfter=0)),
              Paragraph(f'<font size="20" color="{ac}"><b>{a}</b></font>',
@@ -168,7 +162,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Loss header ─────────────────────────────────────────────
     def lh(num, title):
         t = Table([[
             Paragraph(num,
@@ -188,7 +181,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Red box ─────────────────────────────────────────────────
     def rbox(text, bg=None, brd=None):
         if bg is None:
             bg = colors.HexColor("#FFF0F0")
@@ -210,7 +202,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Info box ────────────────────────────────────────────────
     def ibox(lbl, txt, bg=None, brd=None):
         if bg is None:
             bg = ACC_LT
@@ -234,7 +225,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Attention box ───────────────────────────────────────────
     def attn(b, n):
         t = Table([[Paragraph(
             f'<b>{b}</b> {n}',
@@ -252,12 +242,11 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Metrics table ───────────────────────────────────────────
     def metrics_tbl(rows):
-        hdr = ['Indicator', 'Situația actuală', 'Target 90 zile', 'Urgență']
+        hdr = ['Indicator', 'Situatia actuala', 'Target 90 zile', 'Urgenta']
         uc  = {
-            'CRITICĂ':  URG_CLR,
-            'RIDICATĂ': colors.HexColor("#E67E22"),
+            'CRITICA':  URG_CLR,
+            'RIDICATA': colors.HexColor("#E67E22"),
             'MEDIE':    GREEN,
         }
         cw2 = [CW * p for p in [0.26, 0.30, 0.25, 0.19]]
@@ -287,7 +276,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Week block ──────────────────────────────────────────────
     def week_blk(lbl, title, days):
         hs = ParagraphStyle('wh', fontName='Helvetica-Bold', fontSize=10,
                             textColor=TEXT_D, leading=14, spaceAfter=0)
@@ -318,7 +306,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Two-column comparison ────────────────────────────────────
     def tcol(l1, v1, l2, v2):
         hw = CW / 2
         t = Table([[[
@@ -345,7 +332,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Section 5 item ──────────────────────────────────────────
     def s5item(title, desc):
         ac = T["accent"]
         t = Table([[
@@ -368,7 +354,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Urgency box ─────────────────────────────────────────────
     def urgbox(lines, price):
         ps = [Paragraph(l, S('ub', fontSize=9.5,
                              textColor=colors.HexColor("#DDDDDD"),
@@ -393,7 +378,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Before/After table ──────────────────────────────────────
     def ba_table(pairs):
         cw2 = [CW / 2, CW / 2]
         hs2 = ParagraphStyle('mh2', fontName='Helvetica-Bold',
@@ -402,9 +386,8 @@ def build_audit(R: dict) -> bytes:
                              fontSize=9, textColor=colors.HexColor("#333333"),
                              leading=13)
         rows = [[
-            Paragraph('<font color="#C0392B">\u2717 Versiunea actuală</font>', hs2),
-            Paragraph('<font color="#1A6B3A">\u2713 Versiunea cu storytelling '
-                      '(generată)</font>', hs2),
+            Paragraph('<font color="#C0392B">\u2717 Versiunea actuala</font>', hs2),
+            Paragraph('<font color="#1A6B3A">\u2713 Versiunea cu storytelling (generata)</font>', hs2),
         ]]
         for before, after in pairs:
             rows.append([Paragraph(before, cs2), Paragraph(after, cs2)])
@@ -412,8 +395,7 @@ def build_audit(R: dict) -> bytes:
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (0, 0), colors.HexColor("#FDECEA")),
             ('BACKGROUND', (1, 0), (1, 0), colors.HexColor("#EAF5EE")),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1),
-             [colors.white, ROW_ALT]),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, ROW_ALT]),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#DDDDDD")),
             ('TOPPADDING', (0, 0), (-1, -1), 7),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
@@ -423,7 +405,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    # ── Clickable button flowable ────────────────────────────────
     class Btn(Flowable):
         def __init__(self, tbl, url, w):
             Flowable.__init__(self)
@@ -440,7 +421,6 @@ def build_audit(R: dict) -> bytes:
             self.canv.linkURL(self.url, (0, 0, self.w, self._h),
                               relative=1, thickness=0)
 
-    # ── COVER ───────────────────────────────────────────────────
     def cover():
         s = []
         s.append(sp(70))
@@ -462,7 +442,7 @@ def build_audit(R: dict) -> bytes:
                             S('rt', fontName='Helvetica-Bold', fontSize=14,
                               textColor=WHITE, leading=18, spaceAfter=4)))
         s.append(Paragraph(
-            "Diagnosticul prezenței digitale | Plan de acțiune 30 de zile",
+            "Diagnosticul prezentei digitale | Plan de actiune 30 de zile",
             S('cm2', fontSize=11, textColor=colors.HexColor("#AAAAAA"),
               leading=16, spaceAfter=30),
         ))
@@ -485,7 +465,7 @@ def build_audit(R: dict) -> bytes:
         card_dark = colors.HexColor(lighten(T["bg"], 20))
         stats = R.get("stats", [
             ("—", "Rating TripAdvisor"),
-            ("—", "Poziție locală"),
+            ("—", "Pozitie locala"),
             ("—", "Followeri Instagram"),
             ("—", "Facebook fans"),
         ])
@@ -511,9 +491,9 @@ def build_audit(R: dict) -> bytes:
                              textColor=colors.HexColor("#CCCCCC"),
                              leading=12, spaceAfter=2)
         fd = [
-            [Paragraph("PREGĂTIT PENTRU", cfl),
+            [Paragraph("PREGATIT PENTRU", cfl),
              Paragraph(f"{biz} | {city}", cfv)],
-            [Paragraph("PREGĂTIT DE", cfl),
+            [Paragraph("PREGATIT DE", cfl),
              Paragraph("Advisio AI Audit | 2026", cfv)],
         ]
         ft = Table(fd, colWidths=[40 * mm, CW - 40 * mm])
@@ -527,7 +507,6 @@ def build_audit(R: dict) -> bytes:
         s.append(PageBreak())
         return s
 
-    # ── BUILD ────────────────────────────────────────────────────
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -559,32 +538,25 @@ def build_audit(R: dict) -> bytes:
         s.append(tt(loss["manual"], loss["ai"], loss["saving"]))
         s.append(sp(8))
         if loss.get("review_bad"):
-            s.append(Paragraph(
-                "Iată recenzia reală și răspunsul actual vs. varianta profesională:",
-                bold_s,
-            ))
+            s.append(Paragraph("Iata recenzia reala si raspunsul actual vs. varianta profesionala:", bold_s))
             s.append(rbox(loss["review_bad"]))
         if loss.get("review_manager"):
             s.append(sp(4))
-            s.append(Paragraph("Răspuns actual (extras):", bold_s))
+            s.append(Paragraph("Raspuns actual (extras):", bold_s))
             s.append(rbox(loss["review_manager"],
                           bg=colors.HexColor("#FFF8F0"),
                           brd=colors.HexColor("#E67E22")))
         if loss.get("review_good"):
             s.append(sp(4))
-            s.append(Paragraph(
-                "Răspuns generat de AI — gata de publicat:", bold_s,
-            ))
+            s.append(Paragraph("Raspuns generat de AI — gata de publicat:", bold_s))
             s.append(rbox(loss["review_good"],
                           bg=colors.HexColor("#EAF5EE"), brd=GREEN))
         if loss.get("example_box"):
-            s.append(Paragraph(
-                "Iată un exemplu generat gata de folosit:", bold_s,
-            ))
+            s.append(Paragraph("Iata un exemplu generat gata de folosit:", bold_s))
             s.append(sp(4))
             s.append(ibox(*loss["example_box"]))
         if loss.get("before_after"):
-            s.append(Paragraph("Iată diferența concretă:", bold_s))
+            s.append(Paragraph("Iata diferenta concreta:", bold_s))
             s.append(sp(4))
             s.append(ba_table(loss["before_after"]))
         if loss.get("cta_text"):
@@ -597,16 +569,16 @@ def build_audit(R: dict) -> bytes:
 
     s.append(sp(10))
     s.append(tcol(
-        "Timp total pierdut / săptămână (actual)", R.get("total_manual", "—"),
-        "Timp total cu AI / săptămână", R.get("total_ai", "—"),
+        "Timp total pierdut / saptamana (actual)", R.get("total_manual", "—"),
+        "Timp total cu AI / saptamana", R.get("total_ai", "—"),
     ))
     s.append(PageBreak())
 
     # S3
     s += sec_hdr("3", "Instrumentele AI Recomandate", R.get("s3_subtitle", ""))
     s.append(Paragraph(
-        "Cele 3 instrumente de mai jos acoperă toate sarcinile identificate. "
-        "Nicio cunoștință tehnică necesară.",
+        "Cele 3 instrumente de mai jos acopera toate sarcinile identificate. "
+        "Nicio cunostinta tehnica necesara.",
         body,
     ))
     s.append(sp(10))
@@ -642,8 +614,7 @@ def build_audit(R: dict) -> bytes:
     s.append(PageBreak())
 
     # S4
-    s += sec_hdr("4", "Câștigurile Tale Rapide în 30 de Zile",
-                 R.get("s4_subtitle", ""))
+    s += sec_hdr("4", "Castigurile Tale Rapide in 30 de Zile", R.get("s4_subtitle", ""))
     s.append(Paragraph(R.get("s4_intro", ""), body))
     s.append(sp(10))
     for lbl2, title2, days2 in R.get("weeks", []):
@@ -652,8 +623,7 @@ def build_audit(R: dict) -> bytes:
     s.append(PageBreak())
 
     # S5
-    s += sec_hdr("5", "Pachetul Complet — Gata de Folosit în 48 de Ore",
-                 R.get("s5_subtitle", ""))
+    s += sec_hdr("5", "Pachetul Complet — Gata de Folosit in 48 de Ore", R.get("s5_subtitle", ""))
     s.append(Paragraph(R.get("s5_intro", ""), body))
     s.append(sp(10))
     for title2, desc2 in R.get("deliverables", []):
@@ -661,7 +631,7 @@ def build_audit(R: dict) -> bytes:
     s.append(sp(14))
     s.append(urgbox(
         R.get("urgency_lines", []),
-        f"Investiție: {R.get('price', '97 USD')} — o singură plată",
+        f"Investitie: {R.get('price', '97 USD')} — o singura plata",
     ))
     s.append(sp(12))
 
@@ -672,13 +642,9 @@ def build_audit(R: dict) -> bytes:
                          textColor=colors.HexColor("#FFF8DC"),
                          leading=13, spaceAfter=0, alignment=TA_CENTER)
     bd = Table([[[
-        Paragraph(f"COMANDĂ PACHETUL — {R.get('price', '97 USD')}", bl1),
+        Paragraph(f"COMANDA PACHETUL — {R.get('price', '97 USD')}", bl1),
         sp(3),
-        Paragraph(
-            "Click aici \u2192 plată cu cardul \u2192 "
-            "primești documentele în 48 de ore",
-            bl2,
-        ),
+        Paragraph("Click aici \u2192 plata cu cardul \u2192 primesti documentele in 48 de ore", bl2),
     ]]], colWidths=[CW])
     bd.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), BTN_BG),
