@@ -21,10 +21,6 @@ MODEL_GENERATE = "claude-sonnet-4-6"
 
 
 def research_restaurant(biz: str, city: str) -> str:
-    """
-    Cauta date reale despre restaurant folosind web search Claude Haiku.
-    Agentic loop corect — rezultatele search sunt transmise inapoi din response.content.
-    """
     print(f"Cautam date reale pentru: {biz} ({city})")
 
     research_prompt = f"""Cauta informatii reale si concrete despre restaurantul "{biz}" din {city}, Romania.
@@ -37,6 +33,7 @@ Cauta urmatoarele si returneaza cifre exacte:
 3. Instagram — cauta contul oficial al restaurantului {biz} din {city}, numar followeri exact, numar postari
 4. Facebook — pagina oficiala {biz} {city}, numar like-uri/followeri, numar check-in-uri
 5. Site oficial daca exista — adresa, program, tip bucatarie
+6. Personalitatea vizuala a restaurantului — culori dominante de pe site/social media, stilul estetic (rustic, modern, elegant, industrial, retro, etc.), tipul de bucatarie, atmosfera generala
 
 Daca nu gasesti date pentru o platforma, scrie explicit "negasit pe [platforma]".
 Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume similar din alte orase."""
@@ -45,7 +42,6 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
     tools    = [{"type": "web_search_20250305", "name": "web_search"}]
     response = None
 
-    # Agentic loop — Claude face search-uri pana termina
     for _ in range(8):
         response = get_client().messages.create(
             model=MODEL_RESEARCH,
@@ -54,7 +50,6 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
             messages=messages,
         )
 
-        # Terminat cu text final — returnam rezultatul
         if response.stop_reason == "end_turn":
             result_text = ""
             for block in response.content:
@@ -63,25 +58,13 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
             print(f"Research complet pentru {biz} ({len(result_text)} caractere)")
             return result_text
 
-        # A folosit tool-uri → adaugam intregul response.content la conversatie
-        # Rezultatele search-ului sunt DEJA in response.content ca tool_result blocks
-        # Nu trebuie sa trimitem nimic manual — doar continuam conversatia
         if response.stop_reason == "tool_use":
-            # Adaugam raspunsul asistentului (care contine si rezultatele search)
-            messages.append({
-                "role": "assistant",
-                "content": response.content,
-            })
-            # Trimitem un mesaj de continuare gol — Claude stie sa continue
-            messages.append({
-                "role": "user",
-                "content": "Continua cu analiza si returneaza datele gasite.",
-            })
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "user", "content": "Continua cu analiza si returneaza datele gasite."})
             continue
 
         break
 
-    # Fallback — extragem orice text din ultimul raspuns
     result_text = ""
     if response:
         for block in response.content:
@@ -93,9 +76,6 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
 
 
 def generate_audit_content(biz: str, city: str, biz_type: str, research_data: str) -> dict:
-    """
-    Genereaza continutul auditului bazat pe datele reale — model Sonnet.
-    """
 
     prompt = f"""Esti un consultant de marketing digital specializat in restaurante din Romania.
 
@@ -111,6 +91,15 @@ Daca o cifra nu a fost gasita in research, foloseste "N/A" sau o estimare realis
 Raspunde DOAR cu un obiect JSON valid, fara text inainte sau dupa, fara markdown, fara ```json.
 
 {{
+  "theme": {{
+    "bg":        "hex culoare inchisa de fundal — aleasa in functie de personalitatea restaurantului",
+    "accent":    "hex culoare accent principala — reprezentativa pentru brand",
+    "accent_lt": "hex versiune foarte deschisa a accentului pentru casete si fundaluri subtile",
+    "row_hdr":   "hex culoare header tabel — varianta medie a bg-ului",
+    "urgent":    "#C0392B",
+    "btn_bg":    "hex culoare buton — de obicei accent sau o varianta a sa",
+    "btn_brd":   "hex culoare bordura buton — usor mai inchisa decat btn_bg"
+  }},
   "emotional_hook": "mesaj motivational specific pentru {biz}, max 120 caractere, fara diacritice",
   "stats": [
     ["4.2 stele", "Rating TripAdvisor"],
@@ -255,6 +244,24 @@ Raspunde DOAR cu un obiect JSON valid, fara text inainte sau dupa, fara markdown
   "s5_closing": "Closing specific pentru {biz} — profesional, fara presiune."
 }}
 
+REGULI PENTRU TEMA DE CULORI:
+Analizeaza personalitatea restaurantului din datele gasite (nume, tip bucatarie, atmosfera, stil vizual de pe site/social media) si alege culori HEX care se potrivesc SPECIFIC acestui restaurant.
+
+Exemple de logica:
+- Berarie artizanala / rustica → bg inchis maro/aramiu (#1A0F0A), accent aramiu/copper (#C17F3E)
+- Restaurant elegant / cultural / teatru → bg bleumarin inchis (#0D1B2A), accent auriu (#C9A84C)  
+- Fine dining / organic / farm-to-table → bg verde padure (#0F2016), accent auriu cald (#C9A84C)
+- Restaurant romantic / wine bar → bg visiniu (#2C0F1A), accent auriu (#C9A84C)
+- Restaurant modern / urban / fusion → bg gri antracit (#1C1C1E), accent albastru electric sau verde neon
+- Restaurant traditional romanesc → bg maro inchis (#1A0A00), accent rosu traditional (#A0251A)
+- Sushi / japonez → bg negru (#0A0A0A), accent rosu lacuit (#CC2200)
+- Mediterranean / italian → bg albastru mediteranean inchis (#0A1628), accent terra cotta (#C4622D)
+- Pub / irish → bg verde inchis (#0A1A0A), accent auriu irlandez (#C9A030)
+
+accent_lt trebuie sa fie INTOTDEAUNA o versiune foarte deschisa (aproape alba) a accentului — pentru casete de fundal.
+row_hdr trebuie sa fie o versiune medie a bg-ului — usor mai deschisa.
+btn_bg si btn_brd trebuie sa fie vizibile si sa contrasteze bine cu textul alb sau inchis.
+
 IMPORTANT:
 - Foloseste EXCLUSIV datele reale din research — nu inventa cifre
 - Daca cifra nu e gasita → marcheza cu ~ sau N/A
@@ -279,11 +286,6 @@ IMPORTANT:
 
 
 def enrich_restaurant_data(R: dict) -> dict:
-    """
-    1. Research cu Haiku + web search (agentic loop corect)
-    2. Generare audit cu Sonnet
-    3. Imbogateste dictionarul R
-    """
     biz      = R.get("bizName", R.get("name", "Restaurant"))
     city     = R.get("city", "Romania")
     biz_type = R.get("type", "restaurant")
@@ -295,6 +297,7 @@ def enrich_restaurant_data(R: dict) -> dict:
         ai_data = generate_audit_content(biz, city, biz_type, research_data)
 
         fields = [
+            "theme",
             "emotional_hook", "stats",
             "s1_subtitle", "s1_body", "s1_attn", "s1_metrics",
             "s2_subtitle", "s3_subtitle",
@@ -306,11 +309,12 @@ def enrich_restaurant_data(R: dict) -> dict:
             if field in ai_data and ai_data[field]:
                 R[field] = ai_data[field]
 
-        # s1_attn trebuie sa fie tuplu pentru build_audit
         if isinstance(R.get("s1_attn"), list) and len(R["s1_attn"]) == 2:
             R["s1_attn"] = tuple(R["s1_attn"])
 
         print(f"Audit personalizat generat cu succes pentru: {biz}")
+        if isinstance(R.get("theme"), dict):
+            print(f"Tema custom generata: bg={R['theme'].get('bg')} accent={R['theme'].get('accent')}")
 
     except json.JSONDecodeError as e:
         print(f"Eroare parsare JSON pentru {biz}: {e} — se folosesc placeholder-urile")
