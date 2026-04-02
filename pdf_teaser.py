@@ -51,8 +51,22 @@ THEMES = {
 }
 
 
+def resolve_theme(R: dict) -> dict:
+    """
+    Accepta theme ca:
+    - string:  "navy_gold", "dark_copper" etc.
+    - dict:    {"bg": "#...", "accent": "#...", ...} — tema custom de la AI
+    - lipsa:   fallback navy_gold
+    """
+    theme = R.get("theme", "navy_gold")
+    if isinstance(theme, dict):
+        default = THEMES["navy_gold"]
+        return {k: theme.get(k, default[k]) for k in default}
+    return THEMES.get(theme, THEMES["navy_gold"])
+
+
 def build_teaser(R: dict) -> bytes:
-    T = THEMES.get(R.get("theme", "navy_gold"), THEMES["navy_gold"])
+    T = resolve_theme(R)
     BG      = colors.HexColor(T["bg"])
     ACC     = colors.HexColor(T["accent"])
     ACC_LT  = colors.HexColor(T["accent_lt"])
