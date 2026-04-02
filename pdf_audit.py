@@ -1,5 +1,5 @@
 """
-ADVISIO — Generator Audit Complet (returneaza bytes)
+ADVISIO — Generator Teaser PDF (returneaza bytes)
 """
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -65,7 +65,7 @@ def resolve_theme(R: dict) -> dict:
     return THEMES.get(theme, THEMES["navy_gold"])
 
 
-def build_audit(R: dict) -> bytes:
+def build_teaser(R: dict) -> bytes:
     T = resolve_theme(R)
     BG      = colors.HexColor(T["bg"])
     ACC     = colors.HexColor(T["accent"])
@@ -87,6 +87,9 @@ def build_audit(R: dict) -> bytes:
     MARGIN = 15 * mm
     CW = W - 2 * MARGIN
 
+    biz  = R.get("name", R.get("bizName", "Restaurant"))
+    city = R.get("subtitle", R.get("city", "Romania"))
+
     def sp(h=8):
         return Spacer(1, h)
 
@@ -103,9 +106,6 @@ def build_audit(R: dict) -> bytes:
     body   = S('body')
     bold_s = S('bold', fontName='Helvetica-Bold')
 
-    biz  = R.get("name", R.get("bizName", "Restaurant"))
-    city = R.get("subtitle", R.get("city", "Romania"))
-
     def hf(c, doc):
         pg = doc.page
         c.saveState()
@@ -121,7 +121,7 @@ def build_audit(R: dict) -> bytes:
             c.rect(0, H - 14 * mm, W, 14 * mm, fill=1, stroke=0)
             c.setFillColor(ACC)
             c.setFont("Helvetica-Bold", 7)
-            c.drawString(15 * mm, H - 9 * mm, "AUDIT AI RESTAURANT")
+            c.drawString(15 * mm, H - 9 * mm, "AUDIT AI RESTAURANT — PREVIEW GRATUIT")
             c.setFillColor(WHITE)
             c.setFont("Helvetica", 7)
             c.drawRightString(W - 15 * mm, H - 9 * mm, f"{biz} | {city}")
@@ -129,8 +129,8 @@ def build_audit(R: dict) -> bytes:
             c.rect(0, H - 6 * mm, W, 6 * mm, fill=1, stroke=0)
         c.setFillColor(TEXT_L)
         c.setFont("Helvetica", 7)
-        c.drawString(15 * mm, 8 * mm, f"Confidential — Pregatit exclusiv pentru {biz}")
-        c.drawCentredString(W / 2, 8 * mm, "Advisio AI Audit | 2026 | Confidential")
+        c.drawString(15 * mm, 8 * mm, f"Preview gratuit — Pregatit exclusiv pentru {biz}")
+        c.drawCentredString(W / 2, 8 * mm, "Advisio AI Audit | 2026")
         c.drawRightString(W - 15 * mm, 8 * mm, f"Pagina {pg - 1}")
         c.restoreState()
 
@@ -290,135 +290,6 @@ def build_audit(R: dict) -> bytes:
         ]))
         return t
 
-    def week_blk(lbl, title, days):
-        hs = ParagraphStyle('wh', fontName='Helvetica-Bold', fontSize=10,
-                            textColor=TEXT_D, leading=14, spaceAfter=0)
-        ac = T["accent"]
-        rows = [[Paragraph(f'<font color="{ac}">{lbl}</font> {title}', hs)]]
-        for d in days:
-            rows.append([[
-                Paragraph(d['day'],
-                          S('wd', fontName='Helvetica-Bold', fontSize=9,
-                            textColor=TEXT_D, leading=13, spaceAfter=2)),
-                Paragraph(d['action'],
-                          S('wa', fontSize=9, textColor=TEXT_D,
-                            leading=13, spaceAfter=2)),
-                Paragraph(d['note'],
-                          S('wn', fontSize=9, textColor=TEXT_M,
-                            leading=13, spaceAfter=0)),
-            ]])
-        t = Table(rows, colWidths=[CW])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), ACC_LT),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('LINEABOVE', (0, 0), (-1, 0), 1.5, ACC),
-            ('LINEBELOW', (0, -1), (-1, -1), 1.5, ACC),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        return t
-
-    def tcol(l1, v1, l2, v2):
-        hw = CW / 2
-        t = Table([[[
-            Paragraph(l1, S('ls', fontSize=8, textColor=TEXT_M,
-                            leading=11, spaceAfter=0)),
-            Paragraph(f'<font size="18" color="#C0392B"><b>{v1}</b></font>',
-                      S('v', alignment=TA_CENTER, spaceAfter=0)),
-        ], [
-            Paragraph(l2, S('ls2', fontSize=8, textColor=TEXT_M,
-                            leading=11, spaceAfter=0)),
-            Paragraph(f'<font size="18" color="#1A6B3A"><b>{v2}</b></font>',
-                      S('v2', alignment=TA_CENTER, spaceAfter=0)),
-        ]]], colWidths=[hw, hw])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#FDECEA")),
-            ('BACKGROUND', (1, 0), (1, -1), colors.HexColor("#EAF5EE")),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#DDDDDD")),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]))
-        return t
-
-    def s5item(title, desc):
-        ac = T["accent"]
-        t = Table([[
-            Paragraph(f'<font color="{ac}"><b>\u2192</b></font>',
-                      S('arr', fontSize=10, spaceAfter=0)),
-            [Paragraph(title,
-                       S('s5t', fontName='Helvetica-Bold', fontSize=10,
-                         textColor=TEXT_D, leading=14, spaceAfter=2)),
-             Paragraph(desc,
-                       S('s5b', fontSize=9.5, textColor=TEXT_M,
-                         leading=14, spaceAfter=0))],
-        ]], colWidths=[8 * mm, CW - 8 * mm])
-        t.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LINEBELOW', (0, 0), (-1, -1), 0.3, colors.HexColor("#EEEEEE")),
-        ]))
-        return t
-
-    def urgbox(lines, price):
-        ps = [Paragraph(l, S('ub', fontSize=9.5,
-                             textColor=colors.HexColor("#DDDDDD"),
-                             leading=14, spaceAfter=6))
-              for l in lines]
-        ac = T["accent"]
-        ps += [
-            sp(8),
-            Paragraph(price,
-                      S('up', fontName='Helvetica-Bold', fontSize=14,
-                        textColor=ACC, leading=18, spaceAfter=0,
-                        alignment=TA_CENTER)),
-        ]
-        t = Table([[ps]], colWidths=[CW])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), BG),
-            ('BOX', (0, 0), (-1, -1), 2, ACC),
-            ('LEFTPADDING', (0, 0), (-1, -1), 20),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 20),
-            ('TOPPADDING', (0, 0), (-1, -1), 16),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
-        ]))
-        return t
-
-    def ba_table(pairs):
-        cw2 = [CW / 2, CW / 2]
-        hs2 = ParagraphStyle('mh2', fontName='Helvetica-Bold',
-                             fontSize=9, leading=13)
-        cs2 = ParagraphStyle('mc2', fontName='Helvetica-Oblique',
-                             fontSize=9, textColor=colors.HexColor("#333333"),
-                             leading=13)
-        rows = [[
-            Paragraph('<font color="#C0392B">\u2717 Versiunea actuala</font>', hs2),
-            Paragraph('<font color="#1A6B3A">\u2713 Versiunea cu storytelling (generata)</font>', hs2),
-        ]]
-        for before, after in pairs:
-            rows.append([Paragraph(before, cs2), Paragraph(after, cs2)])
-        t = Table(rows, colWidths=cw2)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor("#FDECEA")),
-            ('BACKGROUND', (1, 0), (1, 0), colors.HexColor("#EAF5EE")),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, ROW_ALT]),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#DDDDDD")),
-            ('TOPPADDING', (0, 0), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ]))
-        return t
-
     class Btn(Flowable):
         def __init__(self, tbl, url, w):
             Flowable.__init__(self)
@@ -452,15 +323,40 @@ def build_audit(R: dict) -> bytes:
                               leading=15, spaceAfter=8)))
         s.append(HRFlowable(width="100%", thickness=1, color=ACC,
                              spaceAfter=10, spaceBefore=6))
+        badge = Table([[Paragraph(
+            "PREVIEW GRATUIT",
+            S('badge', fontName='Helvetica-Bold', fontSize=9,
+              textColor=colors.HexColor("#0D1B2A"), leading=11,
+              spaceAfter=0, alignment=TA_CENTER),
+        )]], colWidths=[42 * mm])
+        badge.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), ACC),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        s.append(badge)
+        s.append(sp(10))
         s.append(Paragraph("Raport de Audit AI",
-                            S('rt', fontName='Helvetica-Bold', fontSize=14,
-                              textColor=WHITE, leading=18, spaceAfter=4)))
-        s.append(Paragraph(
-            "Diagnosticul prezentei digitale | Plan de actiune 30 de zile",
-            S('cm2', fontSize=11, textColor=colors.HexColor("#AAAAAA"),
-              leading=16, spaceAfter=30),
-        ))
-        s.append(sp(30))
+                            S('rt', fontName='Helvetica-Bold', fontSize=13,
+                              textColor=WHITE, leading=18, spaceAfter=10)))
+        hook = R.get("emotional_hook",
+                     f"{biz} merita o prezenta digitala la fel de buna ca experienta din restaurant.")
+        hook_tbl = Table([[Paragraph(
+            f'<i>{hook}</i>',
+            S('hook', fontName='Helvetica-Oblique', fontSize=12,
+              textColor=ACC, leading=18, spaceAfter=0, alignment=TA_LEFT),
+        )]], colWidths=[CW])
+        hook_tbl.setStyle(TableStyle([
+            ('LINEBEFORE', (0, 0), (0, -1), 3, ACC),
+            ('LEFTPADDING', (0, 0), (-1, -1), 12),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#0A1015")),
+        ]))
+        s.append(hook_tbl)
+        s.append(sp(24))
 
         sb  = ParagraphStyle('sb', fontName='Helvetica-Bold', fontSize=26,
                              textColor=ACC, leading=30, spaceAfter=0,
@@ -497,7 +393,7 @@ def build_audit(R: dict) -> bytes:
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ]))
         s.append(t)
-        s.append(sp(200))
+        s.append(sp(165))
 
         cfl = ParagraphStyle('cfl', fontName='Helvetica-Bold', fontSize=8,
                              textColor=WHITE, leading=12, spaceAfter=2)
@@ -521,12 +417,122 @@ def build_audit(R: dict) -> bytes:
         s.append(PageBreak())
         return s
 
+    def cta_page():
+        s = []
+        s.append(sp(20))
+        s.append(Paragraph(
+            "Acesta este doar preview-ul.",
+            S('ctat', fontName='Helvetica-Bold', fontSize=22,
+              textColor=TEXT_D, leading=28, spaceAfter=8, alignment=TA_LEFT),
+        ))
+        s.append(Paragraph(
+            "Auditul complet contine inca 7 pagini:",
+            S('ctasub', fontSize=13, textColor=TEXT_M,
+              leading=18, spaceAfter=12, alignment=TA_LEFT),
+        ))
+        s.append(sp(6))
+        items = [
+            ("\u2746", "3 pierderi de timp suplimentare",
+             "cu exemple generate specifice pentru restaurantul tau"),
+            ("\u2746", "Instrumentele AI recomandate",
+             "gratuite sau aproape gratuite — fara cunostinte tehnice"),
+            ("\u2746", "Planul de actiune 30 de zile",
+             "saptamana cu saptamana, actiune cu actiune"),
+            ("\u2746", "Diagnosticul complet al prezentei digitale",
+             "cu toate datele si prioritatile"),
+        ]
+        ac = T["accent"]
+        for icon, title2, desc2 in items:
+            rt = Table([[
+                Paragraph(f'<font color="{ac}">{icon}</font>',
+                          S('ic', fontSize=14, textColor=ACC,
+                            leading=18, spaceAfter=0, alignment=TA_CENTER)),
+                [Paragraph(title2,
+                           S('it', fontName='Helvetica-Bold', fontSize=10,
+                             textColor=TEXT_D, leading=14, spaceAfter=2)),
+                 Paragraph(desc2,
+                           S('id', fontSize=9, textColor=TEXT_M,
+                             leading=13, spaceAfter=0, alignment=TA_LEFT))],
+            ]], colWidths=[10 * mm, CW - 10 * mm])
+            rt.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LINEBELOW', (0, 0), (-1, -1), 0.3, colors.HexColor("#EEEEEE")),
+            ]))
+            s.append(rt)
+
+        s.append(sp(20))
+        payment_url = R.get("stripe_url", R.get("payment_url", "#"))
+        urg_content = [
+            Paragraph(
+                f"Auditul complet pentru {biz} este gata de livrat.",
+                S('u1', fontSize=9.5, textColor=colors.HexColor("#DDDDDD"),
+                  leading=14, spaceAfter=6),
+            ),
+            Paragraph(
+                "Fiecare zi fara o prezenta digitala optimizata inseamna "
+                "clienti pierduti in favoarea competitiei.",
+                S('u2', fontSize=9.5, textColor=colors.HexColor("#DDDDDD"),
+                  leading=14, spaceAfter=6),
+            ),
+            Paragraph(
+                "Auditul complet iti arata exact cum sa rezolvi asta.",
+                S('u3', fontName='Helvetica-Bold', fontSize=10,
+                  textColor=ACC, leading=14, spaceAfter=0),
+            ),
+        ]
+        urg_tbl = Table([[urg_content]], colWidths=[CW])
+        urg_tbl.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), BG),
+            ('BOX', (0, 0), (-1, -1), 2, ACC),
+            ('LEFTPADDING', (0, 0), (-1, -1), 20),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 20),
+            ('TOPPADDING', (0, 0), (-1, -1), 16),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
+        ]))
+        s.append(urg_tbl)
+        s.append(sp(16))
+
+        bl1 = ParagraphStyle('bl1', fontName='Helvetica-Bold', fontSize=15,
+                             textColor=BG, leading=20, spaceAfter=0,
+                             alignment=TA_CENTER)
+        bl2 = ParagraphStyle('bl2', fontSize=9,
+                             textColor=colors.HexColor("#1A1A1A"),
+                             leading=13, spaceAfter=0, alignment=TA_CENTER)
+        bd = Table([[[
+            Paragraph("VREAU AUDITUL COMPLET — 97 USD", bl1),
+            sp(3),
+            Paragraph(
+                "Click aici \u2192 plata cu cardul \u2192 primesti auditul complet imediat dupa plata",
+                bl2,
+            ),
+        ]]], colWidths=[CW])
+        bd.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), BTN_BG),
+            ('BOX', (0, 0), (-1, -1), 2, BTN_BRD),
+            ('TOPPADDING', (0, 0), (-1, -1), 16),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
+            ('LEFTPADDING', (0, 0), (-1, -1), 20),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 20),
+        ]))
+        s.append(Btn(bd, payment_url, CW))
+        s.append(sp(10))
+        s.append(Paragraph(
+            "O singura plata de 97 USD. Fara abonament. Primesti auditul complet imediat dupa plata.",
+            S('note', fontSize=8.5, textColor=TEXT_L,
+              leading=13, spaceAfter=0, alignment=TA_CENTER),
+        ))
+        return s
+
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=MARGIN, rightMargin=MARGIN,
         topMargin=20 * mm, bottomMargin=16 * mm,
-        title=f"Audit AI — {biz}",
+        title=f"Audit AI Preview — {biz}",
     )
     s = []
     s += cover()
@@ -542,9 +548,18 @@ def build_audit(R: dict) -> bytes:
         s.append(attn(*R["s1_attn"]))
     s.append(PageBreak())
 
-    # S2
+    # S2 — primele 2 pierderi
     s += sec_hdr("2", "Cele Mai Mari 5 Pierderi de Timp", R.get("s2_subtitle", ""))
-    for i, loss in enumerate(R.get("losses", [])):
+    s.append(Paragraph(
+        "<b>Previzualizare:</b> mai jos gasesti primele 2 din cele 5 pierderi de timp "
+        "identificate. Auditul complet contine toate 5 — cu exemple generate si solutiile concrete.",
+        S('pn', fontSize=9.5, textColor=colors.HexColor("#555555"),
+          leading=14, spaceAfter=10, alignment=TA_LEFT,
+          fontName='Helvetica-Oblique'),
+    ))
+    losses = R.get("losses", [])
+    preview_losses = losses[:2] if len(losses) >= 2 else losses
+    for i, loss in enumerate(preview_losses):
         s.append(lh(loss["num"], loss["title"]))
         s.append(sp(6))
         s.append(Paragraph(loss["body"], body))
@@ -566,112 +581,27 @@ def build_audit(R: dict) -> bytes:
             s.append(rbox(loss["review_good"],
                           bg=colors.HexColor("#EAF5EE"), brd=GREEN))
         if loss.get("example_box"):
-            s.append(Paragraph("Iata un exemplu generat gata de folosit:", bold_s))
+            s.append(Paragraph("Iata o postare gata de publicat:", bold_s))
             s.append(sp(4))
             s.append(ibox(*loss["example_box"]))
-        if loss.get("before_after"):
-            s.append(Paragraph("Iata diferenta concreta:", bold_s))
-            s.append(sp(4))
-            s.append(ba_table(loss["before_after"]))
-        if loss.get("cta_text"):
-            s.append(sp(6))
-            s.append(Paragraph(loss["cta_text"], body))
-        if i < len(R.get("losses", [])) - 1:
+        if i < len(preview_losses) - 1:
             s.append(sp(14))
-        if i in (1, 3):
-            s.append(PageBreak())
 
-    s.append(sp(10))
-    s.append(tcol(
-        "Timp total pierdut / saptamana (actual)", R.get("total_manual", "—"),
-        "Timp total cu AI / saptamana", R.get("total_ai", "—"),
-    ))
-    s.append(PageBreak())
-
-    # S3
-    s += sec_hdr("3", "Instrumentele AI Recomandate", R.get("s3_subtitle", ""))
-    s.append(Paragraph(
-        "Cele 3 instrumente de mai jos acopera toate sarcinile identificate. "
-        "Nicio cunostinta tehnica necesara.",
-        body,
-    ))
-    s.append(sp(10))
-    il = S('inl', fontName='Helvetica-Bold', fontSize=11, textColor=WHITE,
-           leading=14, alignment=TA_CENTER, spaceAfter=2)
-    iu = S('inu', fontSize=8, textColor=ACC, leading=11, alignment=TA_CENTER)
-    iv = S('iv', fontSize=9, textColor=TEXT_M, leading=13,
-           spaceAfter=4, alignment=TA_LEFT)
-    for nm, url_t, cost, desc, use in R.get("tools", []):
-        row = [[[
-            Paragraph(nm, il),
-            Paragraph(url_t, iu),
-        ], [
-            Paragraph(f"<b>Cost:</b> {cost}", iv),
-            Paragraph(f"<b>Ce face:</b> {desc}", iv),
-            Paragraph(f"<b>Folosit pentru:</b> {use}",
-                      S('iv2', fontSize=9, textColor=TEXT_M,
-                        leading=13, spaceAfter=0)),
-        ]]]
-        t = Table(row, colWidths=[30 * mm, CW - 30 * mm])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), BG),
-            ('BACKGROUND', (1, 0), (1, -1), ROW_ALT),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#DDDDDD")),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-        ]))
-        s.append(t)
-        s.append(sp(6))
-    s.append(PageBreak())
-
-    # S4
-    s += sec_hdr("4", "Castigurile Tale Rapide in 30 de Zile", R.get("s4_subtitle", ""))
-    s.append(Paragraph(R.get("s4_intro", ""), body))
-    s.append(sp(10))
-    for lbl2, title2, days2 in R.get("weeks", []):
-        s.append(week_blk(lbl2, title2, days2))
-        s.append(sp(8))
-    s.append(PageBreak())
-
-    # S5
-    s += sec_hdr("5", "Pachetul Complet — Gata de Folosit in 48 de Ore", R.get("s5_subtitle", ""))
-    s.append(Paragraph(R.get("s5_intro", ""), body))
-    s.append(sp(10))
-    for title2, desc2 in R.get("deliverables", []):
-        s.append(s5item(title2, desc2))
-    s.append(sp(14))
-    s.append(urgbox(
-        R.get("urgency_lines", []),
-        f"Investitie: {R.get('price', '97 USD')} — o singura plata",
-    ))
-    s.append(sp(12))
-
-    bl1 = ParagraphStyle('bl1', fontName='Helvetica-Bold', fontSize=14,
-                         textColor=WHITE, leading=18, spaceAfter=0,
-                         alignment=TA_CENTER)
-    bl2 = ParagraphStyle('bl2', fontSize=9,
-                         textColor=colors.HexColor("#FFF8DC"),
-                         leading=13, spaceAfter=0, alignment=TA_CENTER)
-    bd = Table([[[
-        Paragraph(f"COMANDA PACHETUL — {R.get('price', '97 USD')}", bl1),
-        sp(3),
-        Paragraph("Click aici \u2192 plata cu cardul \u2192 primesti documentele in 48 de ore", bl2),
-    ]]], colWidths=[CW])
-    bd.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), BTN_BG),
-        ('BOX', (0, 0), (-1, -1), 2, BTN_BRD),
-        ('TOPPADDING', (0, 0), (-1, -1), 16),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
-        ('LEFTPADDING', (0, 0), (-1, -1), 20),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 20),
+    s.append(sp(16))
+    cutoff = Table([[Paragraph(
+        "· · · · · · · · · · · · · · CONTINUA IN AUDITUL COMPLET · · · · · · · · · · · · · ·",
+        S('cut', fontName='Helvetica-Bold', fontSize=9,
+          textColor=ACC, leading=14, spaceAfter=0, alignment=TA_CENTER),
+    )]], colWidths=[CW])
+    cutoff.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F7F0E0")),
+        ('BOX', (0, 0), (-1, -1), 1, ACC),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
     ]))
-    stripe_url = R.get("stripe_url", "#")
-    s.append(Btn(bd, stripe_url, CW))
-    s.append(sp(10))
-    s.append(Paragraph(R.get("s5_closing", ""), body))
+    s.append(cutoff)
+    s.append(PageBreak())
+    s += cta_page()
 
     doc.build(s, onFirstPage=hf, onLaterPages=hf)
     return buf.getvalue()
