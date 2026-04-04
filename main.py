@@ -243,7 +243,96 @@ def build_restaurant_data(data):
         ),
         "cta_price": "GRATUIT",
     }
+# ════════════════════════════════════════════════════════════════════
+#  SEARCH — Cauta afaceri cu probleme digitale
+#  Adauga acest bloc in main.py inainte de `if __name__ == "__main__":`
+# ════════════════════════════════════════════════════════════════════
 
+@app.route("/search", methods=["POST"])
+def search_businesses():
+    if API_SECRET and not verify_secret(request):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    try:
+        data = request.get_json(force=True)
+    except Exception:
+        return jsonify({"success": False, "error": "Invalid JSON"}), 400
+
+    city     = data.get("city", "").strip()
+    biz_type = data.get("bizType", "Restaurant").strip()
+    criteria = data.get("criteria", [])
+
+    if not city:
+        return jsonify({"success": False, "error": "Campul city este obligatoriu"}), 400
+
+    criteria_text = ", ".join(criteria) if criteria else "prezenta digitala slaba"
+
+    prompt = f'''Cauta pe Google Maps, TripAdvisor, Facebook si Instagram afaceri de tip "{biz_type}" din {city}, Romania.
+
+Identifica 6-10 afaceri REALE care au probleme digitale clare, in special: {criteria_text}.
+
+Pentru fiecare afacere gasita, returneaza un JSON array cu obiecte avand exact aceasta structura:
+[
+  {{
+    "name": "Numele afacerii",
+    "address": "Adresa sau zona din oras",
+    "email": "emailul de contact daca il gasesti, altfel string gol",
+    "phone": "telefonul daca il gasesti, altfel string gol",
+    "problems": ["problema 1 concreta", "problema 2 concreta"],
+    "rating": "ex: 3.8 pe Google",
+    "instagram": "ex: 800 followeri sau Absent",
+    "tripadvisor": "ex: #12 din 45 sau Absent",
+    "notes": "un rand scurt cu observatia principala"
+  }}
+]
+
+IMPORTANT: Returneaza DOAR JSON valid, fara text inainte sau dupa, fara markdown.
+Toate afacerile trebuie sa fie REALE si din {city}. Nu inventa date.'''
+
+    try:
+        import anthropic, json
+
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        messages = [{"role": "user", "content": prompt}]
+        tools    = [{"type": "web_search_20250305", "name": "web_search"}]
+        response = None
+
+        for _ in range(8):
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=3000,
+                tools=tools,
+                messages=messages,
+            )
+            if response.stop_reason == "end_turn":
+                break
+            if response.stop_reason == "tool_use":
+                messages.append({"role": "assistant", "content": response.content})
+                messages.append({"role": "user", "content": "Continua si returneaza JSON-ul final."})
+                continue
+            break
+
+        result_text = ""
+        if response:
+            for block in response.content:
+                if hasattr(block, "text") and block.text:
+                    result_text += block.text
+
+        clean = result_text.strip()
+        if "```" in clean:
+            clean = clean.split("```")[1]
+            if clean.startswith("json"):
+                clean = clean[4:]
+        clean = clean.strip()
+
+        results = json.loads(clean)
+        return jsonify({"success": True, "results": results, "count": len(results)})
+
+    except json.JSONDecodeError as e:
+        return jsonify({"success": False, "error": f"JSON parse error: {str(e)}"}), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
