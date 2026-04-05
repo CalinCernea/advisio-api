@@ -254,9 +254,10 @@ def build_restaurant_data(data):
         ),
         "cta_price": "GRATUIT",
     }
+
+
 # ════════════════════════════════════════════════════════════════════
 #  SEARCH — Cauta afaceri cu probleme digitale
-#  Adauga acest bloc in main.py inainte de `if __name__ == "__main__":`
 # ════════════════════════════════════════════════════════════════════
 
 @app.route("/search", methods=["POST"])
@@ -297,13 +298,15 @@ Pentru fiecare afacere gasita, returneaza un JSON array cu obiecte avand exact a
   }}
 ]
 
-IMPORTANT: Returneaza DOAR JSON valid, fara text inainte sau dupa, fara markdown.
-Toate afacerile trebuie sa fie REALE si din {city}. Nu inventa date.'''
+IMPORTANT: Returneaza DOAR JSON valid, fara text inainte sau dupa, fara markdown, fara backticks.
+Toate string-urile sa foloseasca ghilimele duble. Fara apostrofuri simple in interiorul valorilor.
+Fara diacritice romanesti. Toate afacerile trebuie sa fie REALE si din {city}. Nu inventa date.'''
 
     try:
-        import anthropic, json
+        import anthropic as _anthropic
+        import json as _json
 
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        client   = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
         messages = [{"role": "user", "content": prompt}]
         tools    = [{"type": "web_search_20250305", "name": "web_search"}]
         response = None
@@ -323,43 +326,72 @@ Toate afacerile trebuie sa fie REALE si din {city}. Nu inventa date.'''
                 continue
             break
 
+        # ── Colectam tot textul din raspuns ──────────────────────────
         result_text = ""
         if response:
             for block in response.content:
                 if hasattr(block, "text") and block.text:
                     result_text += block.text
 
-        clean = result_text.strip()
-        if "```" in clean:
-            for part in clean.split("```"):
+        print(f"[search] Raw response ({len(result_text)} chars): {result_text[:300]}...")
+
+        # ── Parsare robusta JSON ──────────────────────────────────────
+        raw = result_text.strip()
+
+        # 1. Scoatem blocurile markdown ```json ... ``` daca exista
+        if "```" in raw:
+            for part in raw.split("```"):
                 part = part.strip()
                 if part.startswith("json"):
                     part = part[4:].strip()
                 if part.startswith("["):
-                    clean = part
+                    raw = part
                     break
 
-        # Gasim primul [ si ultimul ] din tot textul
-        start_idx = clean.find("[")
-        end_idx   = clean.rfind("]")
+        # 2. Extragem de la primul [ pana la ultimul ]
+        start_idx = raw.find("[")
+        end_idx   = raw.rfind("]")
 
-        if start_idx == -1 or end_idx == -1:
+        if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+            print(f"[search] Nu s-a gasit array JSON valid. Raw: {result_text[:500]}")
             return jsonify({
                 "success": False,
-                "error": "AI nu a returnat JSON valid",
-                "raw": result_text[:500]
+                "error":   "AI nu a returnat JSON valid — array negasit",
+                "raw":     result_text[:500],
             }), 500
 
-        clean = clean[start_idx : end_idx + 1]
+        raw = raw[start_idx : end_idx + 1]
 
-        results = json.loads(clean)
+        # 3. Curatam caractere problematice
+        raw = raw.replace('\x00', '')   # null bytes
+        raw = raw.replace('\r\n', ' ')  # CRLF in strings
+        raw = raw.replace('\r', ' ')
+
+        # 4. Parsare cu log detaliat la eroare
+        try:
+            results = _json.loads(raw)
+        except _json.JSONDecodeError as parse_err:
+            # Afisam contextul exact din jurul erorii
+            err_pos     = parse_err.pos or 0
+            snippet_start = max(0, err_pos - 80)
+            snippet_end   = min(len(raw), err_pos + 80)
+            snippet       = raw[snippet_start:snippet_end]
+
+            print(f"[search] JSON parse FAIL la char {err_pos}: ...{snippet}...")
+            return jsonify({
+                "success":       False,
+                "error":         f"JSON parse error: {str(parse_err)}",
+                "error_pos":     err_pos,
+                "error_snippet": snippet,
+                "raw_preview":   raw[:1000],
+            }), 500
+
         return jsonify({"success": True, "results": results, "count": len(results)})
 
-    except json.JSONDecodeError as e:
-        return jsonify({"success": False, "error": f"JSON parse error: {str(e)}"}), 500
     except Exception as e:
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
