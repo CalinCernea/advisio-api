@@ -320,10 +320,26 @@ Toate afacerile trebuie sa fie REALE si din {city}. Nu inventa date.'''
 
         clean = result_text.strip()
         if "```" in clean:
-            clean = clean.split("```")[1]
-            if clean.startswith("json"):
-                clean = clean[4:]
-        clean = clean.strip()
+            for part in clean.split("```"):
+                part = part.strip()
+                if part.startswith("json"):
+                    part = part[4:].strip()
+                if part.startswith("["):
+                    clean = part
+                    break
+
+        # Gasim primul [ si ultimul ] din tot textul
+        start_idx = clean.find("[")
+        end_idx   = clean.rfind("]")
+
+        if start_idx == -1 or end_idx == -1:
+            return jsonify({
+                "success": False,
+                "error": "AI nu a returnat JSON valid",
+                "raw": result_text[:500]
+            }), 500
+
+        clean = clean[start_idx : end_idx + 1]
 
         results = json.loads(clean)
         return jsonify({"success": True, "results": results, "count": len(results)})
