@@ -278,45 +278,27 @@ def search_businesses():
 
     criteria_text = ", ".join(criteria) if criteria else "prezenta digitala slaba"
 
-    prompt = f'''Esti consultant marketing digital pentru restaurante Romania.
+    prompt = f'''Cauta pe Google Maps, TripAdvisor, Facebook si Instagram afaceri de tip "{biz_type}" din {city}, Romania.
 
-Date reale despre "{biz}" din {city}:
----
-{research_data}
----
+Identifica 6-10 afaceri REALE care au probleme digitale clare, in special: {criteria_text}.
 
-Genereaza audit AI. Raspunde DOAR JSON valid, fara markdown.
+Pentru fiecare afacere gasita, returneaza un JSON array cu obiecte avand exact aceasta structura:
+[
+  {{
+    "name": "Numele afacerii",
+    "address": "Adresa sau zona din oras",
+    "email": "emailul de contact daca il gasesti, altfel string gol",
+    "phone": "telefonul daca il gasesti, altfel string gol",
+    "problems": ["problema 1 concreta", "problema 2 concreta"],
+    "rating": "ex: 3.8 pe Google",
+    "instagram": "ex: 800 followeri sau Absent",
+    "tripadvisor": "ex: #12 din 45 sau Absent",
+    "notes": "un rand scurt cu observatia principala"
+  }}
+]
 
-{{
-  "theme": {{"bg": "#hex", "accent": "#hex", "accent_lt": "#hex", "row_hdr": "#hex", "urgent": "#C0392B", "btn_bg": "#hex", "btn_brd": "#hex"}},
-  "emotional_hook": "max 100 caractere, fara diacritice",
-  "stats": [["val", "label"], ["val", "label"], ["val", "label"], ["val", "label"]],
-  "s1_subtitle": "Ce am descoperit despre {biz}",
-  "s1_body": ["paragraf 1", "paragraf 2", "paragraf 3"],
-  "s1_attn": ["ATENTIE — Oportunitate critica:", "descriere"],
-  "s1_metrics": [["indicator", "actual", "target", "CRITICA"], ["indicator", "actual", "target", "RIDICATA"], ["indicator", "actual", "target", "RIDICATA"], ["indicator", "actual", "target", "MEDIE"], ["indicator", "actual", "target", "MEDIE"]],
-  "losses": [
-    {{"num": "01", "title": "titlu", "body": "descriere 2 prop", "manual": "Xh", "ai": "Ymin", "saving": "-Zmin", "review_bad": "recenzie reala", "review_manager": null, "review_good": "raspuns AI", "example_box": null, "before_after": null, "cta_text": "cta"}},
-    {{"num": "02", "title": "titlu", "body": "descriere 2 prop", "manual": "Xh", "ai": "Ymin", "saving": "-Zmin", "review_bad": null, "review_manager": null, "review_good": null, "example_box": ["titlu exemplu", "text exemplu"], "before_after": null, "cta_text": "cta"}},
-    {{"num": "03", "title": "titlu", "body": "descriere 2 prop", "manual": "Xh", "ai": "Ymin", "saving": "-Zmin", "review_bad": null, "review_manager": null, "review_good": null, "example_box": null, "before_after": [["varianta actuala", "varianta AI"]], "cta_text": "cta"}},
-    {{"num": "04", "title": "titlu", "body": "descriere 2 prop", "manual": "Xh", "ai": "Ymin", "saving": "-Zmin", "review_bad": null, "review_manager": null, "review_good": null, "example_box": ["titlu", "text"], "before_after": null, "cta_text": "cta"}},
-    {{"num": "05", "title": "titlu", "body": "descriere 2 prop", "manual": "Xh", "ai": "Ymin", "saving": "-Zmin", "review_bad": null, "review_manager": null, "review_good": null, "example_box": ["titlu", "text"], "before_after": null, "cta_text": "cta"}}
-  ],
-  "total_manual": "~Xh/sapt", "total_ai": "~Yh/sapt",
-  "s2_subtitle": "subtitle", "s3_subtitle": "subtitle", "s4_subtitle": "subtitle",
-  "s4_intro": "intro specific {biz}",
-  "weeks": [
-    ["SAPTAMANA 1", "titlu urgent", [{{"day": "Luni — 30 min", "action": "actiune", "note": "nota"}}, {{"day": "Miercuri — 20 min", "action": "actiune", "note": "nota"}}]],
-    ["SAPTAMANILE 2-3", "titlu", [{{"day": "Luni S2 — 30 min", "action": "actiune", "note": "nota"}}, {{"day": "Luni S3 — 25 min", "action": "actiune", "note": "nota"}}]],
-    ["SAPTAMANA 4", "titlu", [{{"day": "Luni — 25 min", "action": "actiune", "note": "nota"}}, {{"day": "Vineri — 15 min", "action": "evaluare", "note": "nota"}}]]
-  ],
-  "s5_subtitle": "subtitle", "s5_intro": "intro {biz}",
-  "urgency_lines": ["linie 1 cu cifre reale", "linie 2", "linie 3"],
-  "s5_closing": "closing profesional"
-}}
-
-Reguli tema culori: berarie=copper/maro, elegant/cultural=navy/auriu, organic=verde, romantic=visiniu, modern=antracit, japonez=negru/rosu, italian=albastru mediteranean, traditional=maro/rosu.
-Fara diacritice. JSON valid. Date reale din research, N/A daca lipsesc.'''
+IMPORTANT: Returneaza DOAR JSON valid, fara text inainte sau dupa, fara markdown.
+Toate afacerile trebuie sa fie REALE si din {city}. Nu inventa date.'''
 
     try:
         import anthropic, json
