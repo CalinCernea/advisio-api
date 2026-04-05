@@ -23,7 +23,7 @@ MODEL_GENERATE = "claude-sonnet-4-6"
 def research_restaurant(biz: str, city: str) -> str:
     print(f"Cautam date reale pentru: {biz} ({city})")
 
-    research_prompt = f"""Cauta informatii reale si concrete despre restaurantul "{biz}" din {city}, Romania.
+    research_prompt = f'''Cauta informatii reale si concrete despre restaurantul "{biz}" din {city}, Romania.
 
 IMPORTANT: Cauta SPECIFIC pentru {city} — nu alt oras. Daca gasesti rezultate pentru alt oras, ignora-le complet.
 
@@ -36,7 +36,7 @@ Cauta urmatoarele si returneaza cifre exacte:
 6. Personalitatea vizuala a restaurantului — culori dominante de pe site/social media, stilul estetic (rustic, modern, elegant, industrial, retro, etc.), tipul de bucatarie, atmosfera generala
 
 Daca nu gasesti date pentru o platforma, scrie explicit "negasit pe [platforma]".
-Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume similar din alte orase."""
+Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume similar din alte orase.'''
 
     messages = [{"role": "user", "content": research_prompt}]
     tools    = [{"type": "web_search_20250305", "name": "web_search"}]
@@ -77,7 +77,7 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
 
 def generate_audit_content(biz: str, city: str, biz_type: str, research_data: str) -> dict:
 
-    prompt = f"""Esti un consultant de marketing digital specializat in restaurante din Romania.
+    prompt = f'''Esti un consultant de marketing digital specializat in restaurante din Romania.
 
 Ai cercetat restaurantul "{biz}" din {city} si ai gasit urmatoarele date REALE:
 
@@ -266,7 +266,7 @@ IMPORTANT:
 - Foloseste EXCLUSIV datele reale din research — nu inventa cifre
 - Daca cifra nu e gasita → marcheza cu ~ sau N/A
 - Tot continutul fara diacritice romanesti
-- JSON valid, nimic altceva"""
+- JSON valid, nimic altceva'''
 
     message = get_client().messages.create(
         model=MODEL_GENERATE,
@@ -346,7 +346,7 @@ MODEL_GENERATE = "claude-sonnet-4-6"
 def research_restaurant(biz: str, city: str) -> str:
     print(f"Cautam date reale pentru: {biz} ({city})")
 
-    research_prompt = f"""Cauta informatii reale si concrete despre restaurantul "{biz}" din {city}, Romania.
+    research_prompt = f'''Cauta informatii reale si concrete despre restaurantul "{biz}" din {city}, Romania.
 
 IMPORTANT: Cauta SPECIFIC pentru {city} — nu alt oras. Daca gasesti rezultate pentru alt oras, ignora-le complet.
 
@@ -359,7 +359,7 @@ Cauta urmatoarele si returneaza cifre exacte:
 6. Personalitatea vizuala a restaurantului — culori dominante de pe site/social media, stilul estetic (rustic, modern, elegant, industrial, retro, etc.), tipul de bucatarie, atmosfera generala
 
 Daca nu gasesti date pentru o platforma, scrie explicit "negasit pe [platforma]".
-Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume similar din alte orase."""
+Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume similar din alte orase.'''
 
     messages = [{"role": "user", "content": research_prompt}]
     tools    = [{"type": "web_search_20250305", "name": "web_search"}]
@@ -400,7 +400,7 @@ Returneaza DOAR date pentru {biz} din {city}, nu pentru alte restaurante cu nume
 
 def generate_audit_content(biz: str, city: str, biz_type: str, research_data: str) -> dict:
 
-    prompt = f"""Esti un consultant de marketing digital specializat in restaurante din Romania.
+    prompt = f'''Esti un consultant de marketing digital specializat in restaurante din Romania.
 
 Ai cercetat restaurantul "{biz}" din {city} si ai gasit urmatoarele date REALE:
 
@@ -589,7 +589,7 @@ IMPORTANT:
 - Foloseste EXCLUSIV datele reale din research — nu inventa cifre
 - Daca cifra nu e gasita → marcheza cu ~ sau N/A
 - Tot continutul fara diacritice romanesti
-- JSON valid, nimic altceva"""
+- JSON valid, nimic altceva'''
 
     message = get_client().messages.create(
         model=MODEL_GENERATE,
