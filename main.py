@@ -98,11 +98,11 @@ def generate():
 
     # Îmbogățim cu AI
     try:
-    R = enrich_restaurant_data(R)
-    print(f"[generate] enrich OK — losses: {len(R.get('losses', []))}")
-except Exception as enrich_err:
-    print(f"[generate] EROARE enrich: {enrich_err}")
-    traceback.print_exc()
+        R = enrich_restaurant_data(R)
+        print(f"[generate] enrich OK — losses: {len(R.get('losses', []))}")
+    except Exception as enrich_err:
+        print(f"[generate] EROARE enrich: {enrich_err}")
+        traceback.print_exc()
 
     # ── Curățăm TOATE diacriticele din R pentru ReportLab ─────────
     R = protect_theme(R)
