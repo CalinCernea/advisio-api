@@ -299,7 +299,7 @@ Toate afacerile trebuie sa fie REALE si din {city}. Nu inventa date.'''
 
         for _ in range(8):
             response = client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model="claude-sonnet-4-6",
                 max_tokens=3000,
                 tools=tools,
                 messages=messages,
